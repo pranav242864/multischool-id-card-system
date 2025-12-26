@@ -1,3 +1,5 @@
+console.log("RAILWAY STARTED");
+
 const dotenv = require('dotenv');
 
 // Load environment variables first
