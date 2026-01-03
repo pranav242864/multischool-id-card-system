@@ -2,40 +2,39 @@ import { useState } from 'react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Plus, Edit, Trash2, Eye, Upload } from 'lucide-react';
+import { Plus, Edit, Trash2, Eye, Upload, School, FileText, UserCircle, GraduationCap } from 'lucide-react';
 import { Checkbox } from '../ui/checkbox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { Badge } from '../ui/badge';
+
+type TemplateType = 'student' | 'teacher';
 
 interface Template {
   id: string;
   name: string;
+  type: TemplateType;
   createdAt: string;
   lastModified: string;
   status: 'active' | 'draft';
 }
 
-export function TemplateManagement() {
-  const [showEditor, setShowEditor] = useState(false);
-  const [templateData, setTemplateData] = useState({
-    name: '',
-    backgroundImage: null as File | null,
-    fields: {
-      studentName: true,
-      admissionNo: true,
-      class: true,
-      fatherName: false,
-      motherName: false,
-      dob: true,
-      bloodGroup: false,
-      mobile: true,
-      address: false,
-      photo: true,
-    },
-  });
+interface TemplateManagementProps {
+  userRole?: 'superadmin' | 'schooladmin';
+}
 
-  const templates: Template[] = [
+export function TemplateManagement({ userRole = 'schooladmin' }: TemplateManagementProps) {
+  const [showEditor, setShowEditor] = useState(false);
+  const [templateType, setTemplateType] = useState<TemplateType>('student');
+  
+  // School admin's own school (in real app, this would come from user context)
+  const ownSchool = 'Greenfield Public School';
+  
+  // All templates for this school
+  const allTemplates: Template[] = [
     {
       id: '1',
       name: 'Student Card 2025',
+      type: 'student',
       createdAt: '2025-01-15',
       lastModified: '2025-01-20',
       status: 'active',
@@ -43,22 +42,71 @@ export function TemplateManagement() {
     {
       id: '2',
       name: 'Teacher ID Card',
+      type: 'teacher',
       createdAt: '2025-02-01',
       lastModified: '2025-02-10',
       status: 'active',
     },
-    {
-      id: '3',
-      name: 'Draft Template',
-      createdAt: '2025-03-05',
-      lastModified: '2025-03-05',
-      status: 'draft',
-    },
   ];
+
+  // Filter templates by type (all are for own school)
+  const filteredTemplates = allTemplates;
+
+  // Get default fields based on template type
+  const getDefaultFields = (type: TemplateType) => {
+    switch (type) {
+      case 'teacher':
+        return {
+          name: true,
+          email: true,
+          mobile: true,
+          classId: false,
+          schoolId: true,
+          photo: true,
+        };
+      default: // student
+        return {
+          studentName: true,
+          admissionNo: true,
+          class: true,
+          fatherName: false,
+          motherName: false,
+          dob: true,
+          bloodGroup: false,
+          mobile: true,
+          address: false,
+          photo: true,
+        };
+    }
+  };
+
+  const [templateData, setTemplateData] = useState({
+    name: '',
+    backgroundImage: null as File | null,
+    fields: getDefaultFields(templateType),
+  });
+
+  // Update fields when template type changes
+  const handleTemplateTypeChange = (type: TemplateType) => {
+    setTemplateType(type);
+    setTemplateData({
+      ...templateData,
+      fields: getDefaultFields(type),
+    });
+  };
 
   const handleSaveTemplate = () => {
     console.log('Template data:', templateData);
     setShowEditor(false);
+  };
+
+  const handleCreateNew = () => {
+    setTemplateData({
+      name: '',
+      backgroundImage: null,
+      fields: getDefaultFields(templateType),
+    });
+    setShowEditor(true);
   };
 
   return (
@@ -66,13 +114,42 @@ export function TemplateManagement() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-gray-900 mb-2">ID Card Templates</h1>
-          <p className="text-gray-600">Create and manage ID card templates</p>
+          <h1 className="text-gray-900 mb-2 text-2xl font-bold">ID Card Templates</h1>
+          <p className="text-gray-600">{ownSchool}</p>
         </div>
-        <Button onClick={() => setShowEditor(true)}>
-          <Plus className="w-4 h-4 mr-2" />
-          Create New Template
-        </Button>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <Label htmlFor="template-type" className="text-gray-700">Template Type:</Label>
+            <Select value={templateType} onValueChange={(value) => handleTemplateTypeChange(value as TemplateType)}>
+              <SelectTrigger id="template-type" className="w-40">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="teacher">Teacher</SelectItem>
+                <SelectItem value="student">Student</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <Button onClick={handleCreateNew} className="bg-blue-600 hover:bg-blue-700">
+            <Plus className="w-4 h-4 mr-2" />
+            Create New Template
+          </Button>
+        </div>
+      </div>
+
+      {/* School Header */}
+      <div className="bg-white rounded-lg border border-gray-200 p-6">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+            <School className="w-6 h-6 text-blue-600" />
+          </div>
+          <div>
+            <h2 className="text-gray-900 font-semibold text-lg">{ownSchool}</h2>
+            <p className="text-gray-600 text-sm">
+              {filteredTemplates.length} {filteredTemplates.length === 1 ? 'template' : 'templates'}
+            </p>
+          </div>
+        </div>
       </div>
 
       {showEditor ? (
@@ -80,7 +157,7 @@ export function TemplateManagement() {
         <div className="bg-white rounded-lg border border-gray-200 p-6">
           <div className="mb-6">
             <h2 className="text-gray-900 mb-2">Template Editor</h2>
-            <p className="text-gray-600">Configure your ID card template</p>
+            <p className="text-gray-600">Configure your ID card template for {ownSchool}</p>
           </div>
 
           <div className="space-y-6">
@@ -91,7 +168,11 @@ export function TemplateManagement() {
                 id="templateName"
                 value={templateData.name}
                 onChange={(e) => setTemplateData({ ...templateData, name: e.target.value })}
-                placeholder="e.g., Student Card 2025"
+                placeholder={
+                  templateType === 'teacher'
+                    ? 'e.g., Teacher ID Card 2025'
+                    : 'e.g., Student Card 2025'
+                }
               />
             </div>
 
@@ -181,68 +262,102 @@ export function TemplateManagement() {
       ) : (
         /* Template List */
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-6 py-3 text-left text-gray-700">Template Name</th>
-                  <th className="px-6 py-3 text-left text-gray-700">Created</th>
-                  <th className="px-6 py-3 text-left text-gray-700">Last Modified</th>
-                  <th className="px-6 py-3 text-left text-gray-700">Status</th>
-                  <th className="px-6 py-3 text-left text-gray-700">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {templates.map((template) => (
-                  <tr key={template.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4">
-                      <p className="text-gray-900">{template.name}</p>
-                    </td>
-                    <td className="px-6 py-4 text-gray-600">
-                      {new Date(template.createdAt).toLocaleDateString()}
-                    </td>
-                    <td className="px-6 py-4 text-gray-600">
-                      {new Date(template.lastModified).toLocaleDateString()}
-                    </td>
-                    <td className="px-6 py-4">
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded text-xs ${
-                          template.status === 'active'
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-gray-100 text-gray-700'
-                        }`}
-                      >
-                        {template.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <Button variant="ghost" size="sm" title="Preview">
-                          <Eye className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          title="Edit"
-                          onClick={() => setShowEditor(true)}
-                        >
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          title="Delete"
-                          className="text-red-600 hover:text-red-700"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </td>
+          {filteredTemplates.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-gray-700">Template Name</th>
+                    <th className="px-6 py-3 text-left text-gray-700">Type</th>
+                    <th className="px-6 py-3 text-left text-gray-700">Created</th>
+                    <th className="px-6 py-3 text-left text-gray-700">Last Modified</th>
+                    <th className="px-6 py-3 text-left text-gray-700">Status</th>
+                    <th className="px-6 py-3 text-left text-gray-700">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {filteredTemplates.map((template) => (
+                    <tr key={template.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          {template.type === 'teacher' ? (
+                            <UserCircle className="w-5 h-5 text-purple-600" />
+                          ) : (
+                            <GraduationCap className="w-5 h-5 text-green-600" />
+                          )}
+                          <p className="text-gray-900">{template.name}</p>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <Badge variant={template.type === 'teacher' ? 'default' : 'secondary'}>
+                          {template.type.charAt(0).toUpperCase() + template.type.slice(1)}
+                        </Badge>
+                      </td>
+                      <td className="px-6 py-4 text-gray-600">
+                        {new Date(template.createdAt).toLocaleDateString()}
+                      </td>
+                      <td className="px-6 py-4 text-gray-600">
+                        {new Date(template.lastModified).toLocaleDateString()}
+                      </td>
+                      <td className="px-6 py-4">
+                        <span
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded text-xs ${
+                            template.status === 'active'
+                              ? 'bg-green-100 text-green-700'
+                              : 'bg-gray-100 text-gray-700'
+                          }`}
+                        >
+                          {template.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          <Button variant="ghost" size="sm" title="Preview">
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            title="Edit"
+                            onClick={() => {
+                              setTemplateType(template.type);
+                              setTemplateData({
+                                name: template.name,
+                                backgroundImage: null,
+                                fields: getDefaultFields(template.type),
+                              });
+                              setShowEditor(true);
+                            }}
+                          >
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            title="Delete"
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="p-12 text-center">
+              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <FileText className="w-8 h-8 text-gray-400" />
+              </div>
+              <p className="text-gray-600 mb-4">No templates found</p>
+              <Button onClick={handleCreateNew} variant="outline">
+                <Plus className="w-4 h-4 mr-2" />
+                Create Template for {ownSchool}
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </div>

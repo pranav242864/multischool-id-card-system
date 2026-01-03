@@ -1,4 +1,4 @@
-import { School, Users, GraduationCap, TrendingUp, Bell, Layout } from 'lucide-react';
+import { School, Users, GraduationCap, TrendingUp, Bell, UserCircle } from 'lucide-react';
 import { StatCard } from '../ui/StatCard';
 import { Button } from '../ui/button';
 
@@ -70,7 +70,7 @@ export function SuperadminDashboard({ onNavigate }: SuperadminDashboardProps) {
       {/* Quick Actions */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">
         <h2 className="text-gray-900 mb-4">Quick Actions</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Button
             variant="outline"
             className="h-auto py-4 flex flex-col items-start gap-2"
@@ -96,12 +96,23 @@ export function SuperadminDashboard({ onNavigate }: SuperadminDashboardProps) {
           <Button
             variant="outline"
             className="h-auto py-4 flex flex-col items-start gap-2"
-            onClick={() => onNavigate('templates')}
+            onClick={() => onNavigate('students')}
           >
-            <Layout className="w-5 h-5 text-purple-600" />
+            <GraduationCap className="w-5 h-5 text-purple-600" />
             <div className="text-left">
-              <div className="text-gray-900">Manage Templates</div>
-              <div className="text-gray-600">ID card templates</div>
+              <div className="text-gray-900">Manage Students</div>
+              <div className="text-gray-600">View and manage students</div>
+            </div>
+          </Button>
+          <Button
+            variant="outline"
+            className="h-auto py-4 flex flex-col items-start gap-2"
+            onClick={() => onNavigate('teachers')}
+          >
+            <UserCircle className="w-5 h-5 text-orange-600" />
+            <div className="text-left">
+              <div className="text-gray-900">Manage Teachers</div>
+              <div className="text-gray-600">View and manage teachers</div>
             </div>
           </Button>
         </div>

@@ -24,18 +24,23 @@ export function Sidebar({ userRole, currentView, onNavigate, isOpen, onToggle }:
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'schools', label: 'Manage Schools', icon: School },
     { id: 'admins', label: 'Manage Admins', icon: Users },
+    { id: 'teachers', label: 'Manage Teachers', icon: UserCircle },
+    { id: 'students', label: 'Manage Students', icon: GraduationCap },
+    { id: 'templates', label: 'Manage Templates', icon: FileText },
+    { id: 'bulk', label: 'Bulk Operations', icon: Upload },
   ];
 
   const schooladminItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'students', label: 'Manage Students', icon: GraduationCap },
+    { id: 'templates', label: 'ID Card Templates', icon: FileText },
     { id: 'teachers', label: 'Manage Teachers', icon: UserCircle },
     { id: 'bulk', label: 'Bulk Operations', icon: Upload },
-    { id: 'templates', label: 'ID Card Templates', icon: FileText },
   ];
 
   const teacherItems = [
     { id: 'dashboard', label: 'My Class', icon: LayoutDashboard },
+    { id: 'bulk', label: 'Bulk Operations', icon: Upload },
   ];
 
   const menuItems = 

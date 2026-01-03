@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { DataTable, Column } from '../ui/DataTable';
 import { Button } from '../ui/button';
-import { Plus, Edit, Trash2, MapPin, Lock, ChevronDown } from 'lucide-react';
+import { Plus, Edit, Trash2, MapPin, Lock, ChevronDown, School } from 'lucide-react';
 import { AddSchoolModal } from '../modals/AddSchoolModal';
 import { ChangePasswordModal } from '../modals/ChangePasswordModal';
 import { Badge } from '../ui/badge';
@@ -10,6 +10,7 @@ interface School {
   id: string;
   name: string;
   city: string;
+  icon?: string;
   adminName: string;
   adminEmail: string;
   studentCount: number;
@@ -43,7 +44,6 @@ export function ManageSchools() {
     if (!q) return true;
     return (
       s.name.toLowerCase().includes(q) ||
-      s.city.toLowerCase().includes(q) ||
       s.adminName.toLowerCase().includes(q) ||
       s.adminEmail.toLowerCase().includes(q)
     );
@@ -127,23 +127,25 @@ export function ManageSchools() {
   // base columns (without checkbox)
   const baseColumns: Column<School>[] = [
     {
-      key: 'name',
-      header: 'School Name',
-      sortable: true,
+      key: 'icon',
+      header: 'Icon',
       render: (school) => (
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-            <MapPin className="w-4 h-4 text-blue-600" />
-          </div>
-          <span className="text-gray-900 font-medium">{school.name}</span>
+        <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center overflow-hidden">
+          {school.icon ? (
+            <img src={school.icon} alt={school.name} className="w-full h-full object-cover" />
+          ) : (
+            <School className="w-5 h-5 text-blue-600" />
+          )}
         </div>
       ),
     },
     {
-      key: 'city',
-      header: 'City',
+      key: 'name',
+      header: 'School Name',
       sortable: true,
-      render: (school) => <span className="text-gray-700">{school.city}</span>,
+      render: (school) => (
+        <span className="text-gray-900 font-medium">{school.name}</span>
+      ),
     },
     {
       key: 'adminName',

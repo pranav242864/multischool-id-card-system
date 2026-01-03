@@ -4,6 +4,8 @@ import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { GraduationCap, Mail, Lock } from 'lucide-react';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api/v1';
+
 interface LoginPageProps {
   onLogin: (email: string, role: 'superadmin' | 'schooladmin' | 'teacher') => void;
 }
@@ -11,21 +13,99 @@ interface LoginPageProps {
 export function LoginPage({ onLogin }: LoginPageProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Mock login logic based on email
-    if (email.includes('super')) {
-      onLogin(email, 'superadmin');
-    } else if (email.includes('admin')) {
-      onLogin(email, 'schooladmin');
-    } else {
-      onLogin(email, 'teacher');
+    setError('');
+    setLoading(true);
+
+    try {
+      // Call the real backend API
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        // Login failed
+        setError(data.message || 'Invalid credentials. Please try again.');
+        setLoading(false);
+        return;
+      }
+
+      // Login successful
+      // Store token in localStorage
+      if (data.token) {
+        localStorage.setItem('authToken', data.token);
+      }
+
+      // Extract role from response and convert to lowercase for onLogin callback
+      const role = data.user?.role?.toLowerCase() || 'teacher';
+      const roleMap: Record<string, 'superadmin' | 'schooladmin' | 'teacher'> = {
+        'superadmin': 'superadmin',
+        'schooladmin': 'schooladmin',
+        'teacher': 'teacher',
+      };
+
+      // Call onLogin with actual user data
+      onLogin(data.user.email, roleMap[role] || 'teacher');
+    } catch (err) {
+      console.error('Login error:', err);
+      setError('Network error. Please check your connection and try again.');
+      setLoading(false);
     }
   };
 
-  const handleGoogleSignIn = () => {
-    onLogin('demo@school.com', 'schooladmin');
+  const handleGoogleSignIn = async () => {
+    setError('');
+    setLoading(true);
+    
+    try {
+      // Call Google OAuth endpoint
+      const response = await fetch(`${API_BASE_URL}/auth/google`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          email: 'demo@school.com',
+          idToken: '', // Google OAuth token would go here
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        setError(data.message || 'Google sign-in failed. Please try again.');
+        setLoading(false);
+        return;
+      }
+
+      // Store token
+      if (data.token) {
+        localStorage.setItem('authToken', data.token);
+      }
+
+      const role = data.user?.role?.toLowerCase() || 'schooladmin';
+      const roleMap: Record<string, 'superadmin' | 'schooladmin' | 'teacher'> = {
+        'superadmin': 'superadmin',
+        'schooladmin': 'schooladmin',
+        'teacher': 'teacher',
+      };
+
+      onLogin(data.user.email, roleMap[role] || 'schooladmin');
+    } catch (err) {
+      console.error('Google sign-in error:', err);
+      setError('Google sign-in failed. Please try again.');
+      setLoading(false);
+    }
   };
 
   return (
@@ -136,8 +216,14 @@ export function LoginPage({ onLogin }: LoginPageProps) {
               </a>
             </div>
 
-            <Button type="submit" className="w-full">
-              Sign In
+            {error && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+                <p className="text-sm text-red-600">{error}</p>
+              </div>
+            )}
+
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? 'Signing in...' : 'Sign In'}
             </Button>
 
             <div className="relative">

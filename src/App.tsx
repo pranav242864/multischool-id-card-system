@@ -7,10 +7,15 @@ import { ManageSchools } from './components/superadmin/ManageSchools';
 import { ManageSchoolAdmins } from './components/superadmin/ManageSchoolAdmins';
 import { SchooladminDashboard } from './components/schooladmin/SchooladminDashboard';
 import { ManageStudents } from './components/schooladmin/ManageStudents';
+import { ManageStudents as SuperadminManageStudents } from './components/superadmin/ManageStudents';
 import { ManageTeachers } from './components/schooladmin/ManageTeachers';
+import { ManageTeachers as SuperadminManageTeachers } from './components/superadmin/ManageTeachers';
 import { BulkOperations } from './components/schooladmin/BulkOperations';
+import { BulkOperations as SuperadminBulkOperations } from './components/superadmin/BulkOperations';
 import { TemplateManagement } from './components/schooladmin/TemplateManagement';
+import { TemplateManagement as SuperadminTemplateManagement } from './components/superadmin/TemplateManagement';
 import { TeacherDashboard } from './components/teacher/TeacherDashboard';
+import { BulkOperations as TeacherBulkOperations } from './components/teacher/BulkOperations';
 
 type UserRole = 'superadmin' | 'schooladmin' | 'teacher';
 
@@ -59,6 +64,14 @@ export default function App() {
           return <ManageSchools />;
         case 'admins':
           return <ManageSchoolAdmins />;
+        case 'teachers':
+          return <SuperadminManageTeachers />;
+        case 'templates':
+          return <SuperadminTemplateManagement />;
+        case 'students':
+          return <SuperadminManageStudents />;
+        case 'bulk':
+          return <SuperadminBulkOperations userRole="superadmin" />;
         default:
           return <SuperadminDashboard onNavigate={setCurrentView} />;
       }
@@ -74,7 +87,7 @@ export default function App() {
         case 'teachers':
           return <ManageTeachers />;
         case 'bulk':
-          return <BulkOperations />;
+          return <BulkOperations userRole="schooladmin" />;
         case 'templates':
           return <TemplateManagement />;
         default:
@@ -84,7 +97,14 @@ export default function App() {
 
     // Teacher views
     if (currentUser.role === 'teacher') {
-      return <TeacherDashboard />;
+      switch (currentView) {
+        case 'dashboard':
+          return <TeacherDashboard />;
+        case 'bulk':
+          return <TeacherBulkOperations />;
+        default:
+          return <TeacherDashboard />;
+      }
     }
   };
 
