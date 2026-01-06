@@ -32,6 +32,8 @@ router.get('/sessions/:sessionId/students', requireRole('SUPERADMIN', 'SCHOOLADM
 
 // PATCH /api/sessions/:id/activate - Mark the selected session as active
 router.patch('/sessions/:id/activate', requireRole('SUPERADMIN', 'SCHOOLADMIN'), activateSession);
+// PATCH /:id/activate - Alternative route for activating a session
+router.patch('/:id/activate', requireRole('SUPERADMIN', 'SCHOOLADMIN'), activateSession);
 
 // PATCH /api/sessions/:id/deactivate - Deactivate a session
 router.patch('/sessions/:id/deactivate', requireRole('SUPERADMIN', 'SCHOOLADMIN'), deactivateSession);

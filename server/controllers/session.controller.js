@@ -103,6 +103,7 @@ const getSessions = asyncHandler(async (req, res, next) => {
 // Activate a session
 const activateSession = asyncHandler(async (req, res, next) => {
   const { id: sessionId } = req.params;
+  const { schoolId } = req.query;
   const userId = req.user.id;
 
   // Validate ObjectId format
@@ -113,20 +114,52 @@ const activateSession = asyncHandler(async (req, res, next) => {
     });
   }
 
-  // Get schoolId from req.user context (standardized)
-  // Superadmin must provide schoolId in query parameter
-  let schoolId;
-  try {
-    schoolId = getSchoolIdForOperation(req);
-  } catch (error) {
+  // Validate schoolId is provided
+  if (!schoolId) {
     return res.status(400).json({
       success: false,
-      message: error.message
+      message: 'schoolId is required'
+    });
+  }
+
+  // Validate schoolId format
+  if (!mongoose.Types.ObjectId.isValid(schoolId)) {
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid schoolId format'
     });
   }
 
   try {
-    const session = await activateSessionService(sessionId, schoolId);
+    const Session = require('../models/Session');
+
+    // Step 1: Set activeStatus = false for ALL sessions of that school
+    await Session.updateMany(
+      { schoolId: schoolId },
+      { $set: { activeStatus: false } }
+    );
+
+    // Step 2: Set activeStatus = true for the given session (_id + schoolId match)
+    const session = await Session.findOneAndUpdate(
+      {
+        _id: sessionId,
+        schoolId: schoolId
+      },
+      {
+        $set: { activeStatus: true }
+      },
+      {
+        new: true
+      }
+    );
+
+    // Return 404 if session not found
+    if (!session) {
+      return res.status(404).json({
+        success: false,
+        message: 'Session not found'
+      });
+    }
 
     res.status(200).json({
       success: true,
@@ -134,27 +167,6 @@ const activateSession = asyncHandler(async (req, res, next) => {
       data: session
     });
   } catch (error) {
-    if (error.message.includes('Session not found')) {
-      return res.status(404).json({
-        success: false,
-        message: error.message
-      });
-    }
-    
-    if (error.message.includes('does not belong to your school')) {
-      return res.status(403).json({
-        success: false,
-        message: error.message
-      });
-    }
-    
-    if (error.message.includes('already active for this school')) {
-      return res.status(409).json({
-        success: false,
-        message: error.message
-      });
-    }
-
     next(error);
   }
 });
