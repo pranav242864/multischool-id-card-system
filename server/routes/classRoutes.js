@@ -1,5 +1,8 @@
 const express = require('express');
-const { authMiddleware, roleMiddleware } = require('../middleware/authMiddleware');
+const authMiddleware = require('../middleware/authMiddleware');
+const requireRole = require('../middleware/requireRole');
+const schoolScoping = require('../middleware/schoolScoping');
+const activeSessionMiddleware = require('../middleware/activeSessionMiddleware');
 const { 
   createClass, 
   getClasses, 
@@ -9,16 +12,20 @@ const {
 
 const router = express.Router();
 
-// POST /api/classes - Create a new class
-router.post('/classes', authMiddleware, roleMiddleware('Superadmin', 'Schooladmin'), createClass);
+// Apply authentication and school scoping to all routes
+router.use(authMiddleware);
+router.use(schoolScoping);
 
-// GET /api/classes - List classes for current school
-router.get('/classes', authMiddleware, roleMiddleware('Superadmin', 'Schooladmin', 'Teacher'), getClasses);
+// POST /api/v1/classes
+router.post('/', requireRole('SUPERADMIN', 'SCHOOLADMIN'), activeSessionMiddleware, createClass);
 
-// PATCH /api/classes/:id/freeze - Freeze a class
-router.patch('/classes/:id/freeze', authMiddleware, roleMiddleware('Superadmin', 'Schooladmin'), freezeClass);
+// GET /api/v1/classes
+router.get('/', requireRole('SUPERADMIN', 'SCHOOLADMIN', 'TEACHER'), activeSessionMiddleware, getClasses);
 
-// PATCH /api/classes/:id/unfreeze - Unfreeze a class
-router.patch('/classes/:id/unfreeze', authMiddleware, roleMiddleware('Superadmin', 'Schooladmin'), unfreezeClass);
+// PATCH /api/v1/classes/:id/freeze
+router.patch('/:id/freeze', requireRole('SUPERADMIN', 'SCHOOLADMIN'), activeSessionMiddleware, freezeClass);
+
+// PATCH /api/v1/classes/:id/unfreeze
+router.patch('/:id/unfreeze', requireRole('SUPERADMIN', 'SCHOOLADMIN'), activeSessionMiddleware, unfreezeClass);
 
 module.exports = router;

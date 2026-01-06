@@ -38,3 +38,4 @@ const schoolScoping = (req, res, next) => {
 };
 
 module.exports = schoolScoping;
+

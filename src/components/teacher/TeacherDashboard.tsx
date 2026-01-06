@@ -7,7 +7,7 @@ import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { AddStudentModal } from '../modals/AddStudentModal';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { templateAPI, bulkImportAPI } from '../../utils/api';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 
 interface Student {
   id: string;
@@ -201,17 +201,28 @@ export function TeacherDashboard() {
       
       console.log(`Generating Excel template with ${headers.length} columns from ID template:`, headers);
       
-      const workbook = XLSX.utils.book_new();
-      const worksheetData = [
-        headers, // Header row - these are the fields from ID Card Template
-        headers.map(() => ''), // Empty example row for user to fill
-      ];
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('Template');
       
-      const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
-      const colWidths = headers.map(header => ({ wch: Math.max(header.length + 5, 15) }));
-      worksheet['!cols'] = colWidths;
+      // Add header row
+      worksheet.addRow(headers);
       
-      XLSX.utils.book_append_sheet(workbook, worksheet, 'Template');
+      // Add empty example row
+      worksheet.addRow(headers.map(() => ''));
+      
+      // Set column widths
+      worksheet.columns = headers.map(header => ({
+        width: Math.max(header.length + 5, 15)
+      }));
+      
+      // Style header row
+      const headerRow = worksheet.getRow(1);
+      headerRow.font = { bold: true };
+      headerRow.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE0E0E0' }
+      };
       
       const timestamp = new Date().toISOString().split('T')[0];
       const templateName = template?.name 
@@ -219,7 +230,15 @@ export function TeacherDashboard() {
         : 'student_template';
       const filename = `${assignedClass.replace(/[^a-z0-9]/gi, '_')}_${templateName}_${timestamp}.xlsx`;
       
-      XLSX.writeFile(workbook, filename);
+      // Generate buffer and download
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      link.click();
+      window.URL.revokeObjectURL(url);
       
       console.log(`Excel template "${filename}" generated with fields from ID Card Template`);
       

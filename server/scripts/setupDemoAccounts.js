@@ -19,21 +19,21 @@ const DEMO_ACCOUNTS = [
   { 
     email: 'super@admin.com', 
     password: 'admin123', 
-    role: 'Superadmin',
+    role: 'SUPERADMIN',
     name: 'Super Admin',
     username: 'superadmin'
   },
   { 
     email: 'admin@school.com', 
     password: 'admin123', 
-    role: 'Schooladmin',
+    role: 'SCHOOLADMIN',
     name: 'School Admin',
     username: 'schooladmin'
   },
   { 
     email: 'teacher@school.com', 
     password: 'teacher123', 
-    role: 'Teacher',
+    role: 'TEACHER',
     name: 'Demo Teacher',
     username: 'teacher'
   }
@@ -86,27 +86,28 @@ async function setupDemoAccounts() {
           role: account.role,
           name: account.name,
           username: account.username,
-          status: 'active'
+          status: 'ACTIVE'
         };
 
         // Only add schoolId for non-superadmin users
-        if (account.role !== 'Superadmin') {
+        if (account.role !== 'SUPERADMIN') {
           userData.schoolId = demoSchool._id;
         }
 
         user = await User.create(userData);
         console.log(`   ✅ Created ${account.role}: ${account.email}`);
         console.log(`      Password: ${account.password}`);
-        console.log(`      School: ${account.role === 'Superadmin' ? 'N/A' : demoSchool.name}`);
+        console.log(`      School: ${account.role === 'SUPERADMIN' ? 'N/A' : demoSchool.name}`);
       } else {
         // Update existing user
         const updates = {
           passwordHash: passwordHash,
-          status: 'active'
+          status: 'ACTIVE',
+          role: account.role  // Update role to match expected format
         };
 
         // Ensure schoolId is set for non-superadmin users
-        if (account.role !== 'Superadmin') {
+        if (account.role !== 'SUPERADMIN') {
           updates.schoolId = demoSchool._id;
         } else {
           // Ensure superadmin doesn't have schoolId
@@ -122,7 +123,7 @@ async function setupDemoAccounts() {
         user = await User.findById(user._id);
         console.log(`   ✅ Updated ${account.role}: ${account.email}`);
         console.log(`      Password: ${account.password}`);
-        console.log(`      School: ${account.role === 'Superadmin' ? 'N/A' : demoSchool.name}`);
+        console.log(`      School: ${account.role === 'SUPERADMIN' ? 'N/A' : demoSchool.name}`);
       }
 
       // Verify password works (use the passwordHash we just set)

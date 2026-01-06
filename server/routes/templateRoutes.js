@@ -1,17 +1,28 @@
 const express = require('express');
 const {
+  createTemplate,
   getTemplates,
   getTemplate,
   getActiveTemplate,
   downloadExcelTemplate,
   downloadExcelTemplateByType
 } = require('../controllers/templateController');
-const { authMiddleware } = require('../middleware/authMiddleware');
+const authMiddleware = require('../middleware/authMiddleware');
+const requireRole = require('../middleware/requireRole');
+const schoolScoping = require('../middleware/schoolScoping');
+const activeSessionMiddleware = require('../middleware/activeSessionMiddleware');
 
 const router = express.Router();
 
-// All routes require authentication
+// All routes require authentication, school scoping, role check, and active session
 router.use(authMiddleware);
+router.use(schoolScoping);
+router.use(requireRole('SUPERADMIN', 'SCHOOLADMIN'));
+router.use(activeSessionMiddleware);
+
+// @route   POST /api/v1/templates
+// @desc    Create a new template
+router.post('/', createTemplate);
 
 // @route   GET /api/v1/templates
 // @desc    Get templates
@@ -34,4 +45,3 @@ router.get('/:id/download-excel', downloadExcelTemplate);
 router.get('/:id', getTemplate);
 
 module.exports = router;
-

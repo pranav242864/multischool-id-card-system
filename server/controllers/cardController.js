@@ -3,12 +3,19 @@ const Student = require('../models/Student');
 const Teacher = require('../models/Teacher');
 const Class = require('../models/Class');
 const Template = require('../models/Template');
+const CardLog = require('../models/CardLog');
 const { getActiveSession } = require('../utils/sessionUtils');
 const { checkClassNotFrozen } = require('../services/class.service');
+const { generateStudentCardData, generateTeacherCardData } = require('../services/card.service');
+const { generatePdf } = require('../services/pdf.service');
 const asyncHandler = require('../utils/asyncHandler');
 const { getSchoolIdForOperation } = require('../utils/getSchoolId');
 const { isSuperadmin, isTeacher } = require('../utils/roleGuards');
 const User = require('../models/User');
+const archiver = require('archiver');
+
+// Bulk operation safety limit (configurable via env, defaults to 100)
+const MAX_BULK_STUDENTS = parseInt(process.env.MAX_BULK_STUDENTS || '100', 10);
 
 /**
  * Generate ID card for a single student
@@ -107,53 +114,25 @@ const generateStudentCard = asyncHandler(async (req, res, next) => {
         });
       }
 
-    // Get template (use provided templateId or active template)
-    let template;
-    if (templateId) {
-      template = await Template.findById(templateId);
-      if (!template) {
-        return res.status(404).json({
-          success: false,
-          message: 'Template not found'
-        });
-      }
-      // Verify template belongs to school (for non-superadmin)
-      if (!isSuperadmin(req.user) && template.schoolId.toString() !== effectiveSchoolId.toString()) {
-        return res.status(403).json({
-          success: false,
-          message: 'Template does not belong to your school'
-        });
-      }
-    } else {
-      // Get active template for student type
-      template = await Template.findOne({
-        type: 'student',
-        schoolId: effectiveSchoolId
-      }).sort({ createdAt: -1 });
+    // Generate card data using service (returns render-ready JSON, NO PDF)
+    const cardData = await generateStudentCardData(studentId, templateId, effectiveSchoolId);
 
-      if (!template) {
-        return res.status(404).json({
-          success: false,
-          message: 'No active template found for student ID cards'
-        });
-      }
-    }
+    // Log card generation
+    await CardLog.create({
+      userId: req.user.id,
+      role: req.user.role,
+      schoolId: effectiveSchoolId,
+      sessionId: student.sessionId._id,
+      templateId: cardData.templateId,
+      entityType: 'STUDENT',
+      entityId: studentId,
+      timestamp: new Date()
+    });
 
-    // TODO: Implement actual PDF generation using pdf-lib or Puppeteer
-    // For now, return a placeholder response
     res.status(200).json({
       success: true,
-      message: 'ID card generation initiated',
-      data: {
-        studentId: student._id,
-        studentName: student.name,
-        classId: student.classId._id,
-        className: student.classId.className,
-        templateId: template._id,
-        templateName: template.name || 'Default Template',
-        // In production, this would return the PDF buffer or URL
-        cardUrl: null // Placeholder for generated card URL
-      }
+      message: 'Card data generated successfully',
+      data: cardData
     });
   } catch (error) {
     if (error.message.includes('No active session found')) {
@@ -317,20 +296,116 @@ const generateBulkStudentCards = asyncHandler(async (req, res, next) => {
       }
     }
 
-    // TODO: Implement actual bulk PDF generation
+    // Generate card data for all students (render-ready JSON, NO PDF)
+    const { generateCardData } = require('../services/card.service');
+    const cardsData = students.map(student => {
+      try {
+        return generateCardData(student, template, 'STUDENT');
+      } catch (error) {
+        return {
+          studentId: student._id,
+          error: error.message
+        };
+      }
+    });
+
+    // Log card generation for each student
+    const logPromises = students.map(student => 
+      CardLog.create({
+        userId: req.user.id,
+        role: req.user.role,
+        schoolId: effectiveSchoolId,
+        sessionId: activeSession._id,
+        templateId: template._id,
+        entityType: 'STUDENT',
+        entityId: student._id,
+        timestamp: new Date()
+      })
+    );
+    await Promise.all(logPromises);
+
     res.status(200).json({
       success: true,
-      message: `Bulk ID card generation initiated for ${students.length} student(s)`,
+      message: `Card data generated for ${students.length} student(s)`,
       data: {
         count: students.length,
-        studentIds: students.map(s => s._id),
-        classId: classId || (students[0]?.classId?._id),
-        templateId: template._id,
-        templateName: template.name || 'Default Template'
+        cards: cardsData
       }
     });
   } catch (error) {
     if (error.message.includes('No active session found')) {
+      return res.status(400).json({
+        success: false,
+        message: error.message
+      });
+    }
+    next(error);
+  }
+});
+
+/**
+ * Generate and return student card PDF by studentId
+ * Flow:
+ *  1. Generate card data using existing card.service
+ *  2. Pass render data to pdf.service
+ *  3. Return PDF as application/pdf
+ * Notes:
+ *  - Route-level middleware enforces:
+ *      authMiddleware → schoolScoping → requireRole(SUPERADMIN, SCHOOLADMIN) → activeSessionMiddleware
+ */
+const generateStudentCardPdfById = asyncHandler(async (req, res, next) => {
+  const { studentId } = req.params;
+  const { templateId } = req.query;
+
+  // Validate ObjectId format
+  if (!mongoose.Types.ObjectId.isValid(studentId)) {
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid student ID format'
+    });
+  }
+
+  // Get schoolId from req.user context (standardized)
+  let effectiveSchoolId;
+  try {
+    effectiveSchoolId = getSchoolIdForOperation(req);
+  } catch (error) {
+    return res.status(400).json({
+      success: false,
+      message: error.message
+    });
+  }
+
+  try {
+    // Generate card data using existing service (includes school/session/template checks)
+    const cardData = await generateStudentCardData(
+      studentId,
+      templateId,
+      effectiveSchoolId
+    );
+
+    // Map to render-ready JSON for PDF service
+    const renderData = {
+      layoutConfig: cardData.layoutConfig,
+      data: { ...cardData.data }
+    };
+
+    // Generate PDF buffer (in-memory, no disk writes)
+    const pdfBuffer = await generatePdf(renderData);
+
+    // Set correct headers for PDF response
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'inline; filename="student-card.pdf"');
+
+    // Send PDF buffer
+    res.status(200).send(pdfBuffer);
+  } catch (error) {
+    // Propagate known validation/business errors as 400/403 when appropriate
+    if (
+      error.message.includes('Student not found') ||
+      error.message.includes('does not belong to the specified school') ||
+      error.message.includes('No active template')
+    ) {
       return res.status(400).json({
         success: false,
         message: error.message
@@ -400,6 +475,352 @@ const generateTeacherCard = asyncHandler(async (req, res, next) => {
       }
     }
 
+    // Get active session for template lookup
+    const activeSession = await getActiveSession(effectiveSchoolId);
+
+    // Generate card data using service (returns render-ready JSON, NO PDF)
+    const cardData = await generateTeacherCardData(teacherId, templateId, effectiveSchoolId, activeSession._id);
+
+    // Log card generation
+    await CardLog.create({
+      userId: req.user.id,
+      role: req.user.role,
+      schoolId: effectiveSchoolId,
+      sessionId: activeSession._id,
+      templateId: cardData.templateId,
+      entityType: 'TEACHER',
+      entityId: teacherId,
+      timestamp: new Date()
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Card data generated successfully',
+      data: cardData
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * Generate and return teacher card PDF by teacherId
+ * Flow:
+ *  1. Generate card data using existing card.service
+ *  2. Pass render data to pdf.service
+ *  3. Return PDF as application/pdf
+ * Notes:
+ *  - Route-level middleware enforces:
+ *      authMiddleware → schoolScoping → requireRole(SUPERADMIN, SCHOOLADMIN, TEACHER) → activeSessionMiddleware → checkTeacherCardPermission
+ *  - Teacher restrictions (active, class assignment, allowTeacherCardGeneration) are enforced by checkTeacherCardPermission middleware
+ */
+const generateTeacherCardPdfById = asyncHandler(async (req, res, next) => {
+  const { teacherId } = req.params;
+  const { templateId } = req.query;
+
+  // Validate ObjectId format
+  if (!mongoose.Types.ObjectId.isValid(teacherId)) {
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid teacher ID format'
+    });
+  }
+
+  // Get schoolId from req.user context (standardized)
+  let effectiveSchoolId;
+  try {
+    effectiveSchoolId = getSchoolIdForOperation(req);
+  } catch (error) {
+    return res.status(400).json({
+      success: false,
+      message: error.message
+    });
+  }
+
+  try {
+    // Ensure active session (activeSessionMiddleware already enforced; reuse if present)
+    const activeSession = req.activeSession || (await getActiveSession(effectiveSchoolId));
+
+    // Generate card data using existing service (includes school/template checks)
+    const cardData = await generateTeacherCardData(
+      teacherId,
+      templateId,
+      effectiveSchoolId,
+      activeSession._id
+    );
+
+    // Map to render-ready JSON for PDF service
+    const renderData = {
+      layoutConfig: cardData.layoutConfig,
+      data: { ...cardData.data }
+    };
+
+    // Generate PDF buffer (in-memory, no disk writes)
+    const pdfBuffer = await generatePdf(renderData);
+
+    // Set correct headers for PDF response
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'inline; filename="teacher-card.pdf"');
+
+    // Send PDF buffer
+    res.status(200).send(pdfBuffer);
+  } catch (error) {
+    if (
+      error.message.includes('Teacher not found') ||
+      error.message.includes('does not belong to the specified school') ||
+      error.message.includes('No active template')
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: error.message
+      });
+    }
+    next(error);
+  }
+});
+
+/**
+ * Generate PDF for student card
+ * Receives validated card JSON and generates PDF
+ * No business logic - pure PDF generation controller
+ */
+const generateStudentCardPDF = asyncHandler(async (req, res, next) => {
+  // Expect cardData to be in req.body (validated JSON from card service)
+  const cardData = req.body;
+
+  // Validate cardData structure
+  if (!cardData || !cardData.layoutConfig || !cardData.data) {
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid card data. Card data with layoutConfig and data is required'
+    });
+  }
+
+  try {
+    // Ensure cardData is a plain object (not Mongoose document)
+    // Controllers should receive plain JSON from card service, but validate for safety
+    const plainCardData = {
+      templateId: String(cardData.templateId || ''),
+      templateType: String(cardData.templateType || ''),
+      layoutConfig: cardData.layoutConfig,
+      data: { ...cardData.data }
+    };
+
+    // Generate PDF buffer using pdf service (in-memory, no disk writes)
+    const pdfBuffer = await generatePdf(plainCardData);
+
+    // Set correct headers for PDF response
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'inline; filename="student-card.pdf"');
+
+    // Send PDF buffer
+    res.status(200).send(pdfBuffer);
+
+    // Fire-and-forget audit logging for PDF generation
+    try {
+      const schoolId = getSchoolIdForOperation(req);
+      const sessionId = req.activeSession ? req.activeSession._id : null;
+      const templateId = cardData.templateId;
+      const entityId = req.params.studentId;
+
+      if (templateId && sessionId && entityId && schoolId) {
+        CardLog.create({
+          userId: req.user.id,
+          role: req.user.role,
+          schoolId,
+          sessionId,
+          templateId,
+          entityType: 'STUDENT',
+          entityId,
+          timestamp: new Date()
+        }).catch(() => {
+          // Silently fail audit logging - do not affect response
+        });
+      }
+    } catch {
+      // Silently fail audit logging preparation - do not affect response
+    }
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * Generate PDF for teacher card
+ * Receives validated card JSON and generates PDF
+ * No business logic - pure PDF generation controller
+ */
+const generateTeacherCardPDF = asyncHandler(async (req, res, next) => {
+  // Expect cardData to be in req.body (validated JSON from card service)
+  const cardData = req.body;
+
+  // Validate cardData structure
+  if (!cardData || !cardData.layoutConfig || !cardData.data) {
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid card data. Card data with layoutConfig and data is required'
+    });
+  }
+
+  try {
+    // Ensure cardData is a plain object (not Mongoose document)
+    // Controllers should receive plain JSON from card service, but validate for safety
+    const plainCardData = {
+      templateId: String(cardData.templateId || ''),
+      templateType: String(cardData.templateType || ''),
+      layoutConfig: cardData.layoutConfig,
+      data: { ...cardData.data }
+    };
+
+    // Generate PDF buffer using pdf service (in-memory, no disk writes)
+    const pdfBuffer = await generatePdf(plainCardData);
+
+    // Set correct headers for PDF response
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'inline; filename="teacher-card.pdf"');
+
+    // Send PDF buffer
+    res.status(200).send(pdfBuffer);
+
+    // Fire-and-forget audit logging for PDF generation
+    try {
+      const schoolId = getSchoolIdForOperation(req);
+      const sessionId = req.activeSession ? req.activeSession._id : null;
+      const templateId = cardData.templateId;
+      const entityId = req.params.teacherId;
+
+      if (templateId && sessionId && entityId && schoolId) {
+        CardLog.create({
+          userId: req.user.id,
+          role: req.user.role,
+          schoolId,
+          sessionId,
+          templateId,
+          entityType: 'TEACHER',
+          entityId,
+          timestamp: new Date()
+        }).catch(() => {
+          // Silently fail audit logging - do not affect response
+        });
+      }
+    } catch {
+      // Silently fail audit logging preparation - do not affect response
+    }
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * Generate PDFs for multiple students (bulk) and return as ZIP
+ * Teachers are blocked from bulk operations
+ * Requirements:
+ * - Accept array of student IDs
+ * - Validate all students belong to same class, same school, and active session
+ * - Generate PDFs in-memory (no disk writes)
+ * - Return ZIP file
+ */
+const generateBulkStudentCardsPDF = asyncHandler(async (req, res, next) => {
+  const { studentIds, templateId } = req.body;
+
+  // Validate input
+  if (!studentIds || !Array.isArray(studentIds) || studentIds.length === 0) {
+    return res.status(400).json({
+      success: false,
+      message: 'studentIds array is required and must not be empty'
+    });
+  }
+
+  // Enforce maximum bulk size
+  if (studentIds.length > MAX_BULK_STUDENTS) {
+    return res.status(400).json({
+      success: false,
+      message: `Bulk operation limit exceeded. Maximum ${MAX_BULK_STUDENTS} students per request are allowed.`,
+      receivedCount: studentIds.length
+    });
+  }
+
+  // Validate all student IDs are valid ObjectIds
+  const invalidIds = studentIds.filter(id => !mongoose.Types.ObjectId.isValid(id));
+  if (invalidIds.length > 0) {
+    return res.status(400).json({
+      success: false,
+      message: `Invalid student ID format(s): ${invalidIds.join(', ')}`
+    });
+  }
+
+  // Get schoolId from req.user context
+  let effectiveSchoolId;
+  try {
+    effectiveSchoolId = getSchoolIdForOperation(req);
+  } catch (error) {
+    return res.status(400).json({
+      success: false,
+      message: error.message
+    });
+  }
+
+  try {
+    // Get active session
+    const activeSession = await getActiveSession(effectiveSchoolId);
+
+    // Find all students - MUST filter by schoolId and active session
+    const students = await Student.find({
+      _id: { $in: studentIds },
+      schoolId: effectiveSchoolId,
+      sessionId: activeSession._id
+    })
+      .populate('classId', 'className sessionId')
+      .populate('sessionId', 'sessionName activeStatus');
+
+    if (students.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No valid students found for the provided IDs in the active session and school'
+      });
+    }
+
+    // Fail entire request if ANY student is invalid / not found / wrong session/school
+    if (students.length !== studentIds.length) {
+      const foundIdsSet = new Set(students.map(s => s._id.toString()));
+      const missingIds = studentIds
+        .map(id => id.toString())
+        .filter(id => !foundIdsSet.has(id));
+
+      return res.status(400).json({
+        success: false,
+        message: 'One or more students are invalid, do not belong to this school, or are not in the active session',
+        invalidStudentIds: missingIds
+      });
+    }
+
+    // Validate all students belong to same class
+    const classIds = [...new Set(students.map(s => s.classId._id.toString()))];
+    if (classIds.length > 1) {
+      return res.status(400).json({
+        success: false,
+        message: 'All students must belong to the same class'
+      });
+    }
+
+    // Validate all students belong to same school (already filtered, but double-check)
+    const schoolIds = [...new Set(students.map(s => s.schoolId.toString()))];
+    if (schoolIds.length > 1 || schoolIds[0] !== effectiveSchoolId.toString()) {
+      return res.status(400).json({
+        success: false,
+        message: 'All students must belong to the same school'
+      });
+    }
+
+    // Validate all students belong to active session (already filtered, but double-check)
+    const sessionIds = [...new Set(students.map(s => s.sessionId._id.toString()))];
+    if (sessionIds.length > 1 || sessionIds[0] !== activeSession._id.toString()) {
+      return res.status(400).json({
+        success: false,
+        message: 'All students must belong to the active session'
+      });
+    }
+
     // Get template
     let template;
     if (templateId) {
@@ -416,33 +837,282 @@ const generateTeacherCard = asyncHandler(async (req, res, next) => {
           message: 'Template does not belong to your school'
         });
       }
+      if (template.sessionId.toString() !== activeSession._id.toString()) {
+        return res.status(400).json({
+          success: false,
+          message: 'Template does not belong to the active session'
+        });
+      }
     } else {
-      template = await Template.findOne({
-        type: 'teacher',
-        schoolId: effectiveSchoolId
-      }).sort({ createdAt: -1 });
-
+      // Get active template for STUDENT type
+      const { getActiveTemplate } = require('../services/template.service');
+      template = await getActiveTemplate(effectiveSchoolId, activeSession._id, 'STUDENT');
       if (!template) {
         return res.status(404).json({
           success: false,
-          message: 'No active template found for teacher ID cards'
+          message: 'No active template found for STUDENT type'
         });
       }
     }
 
-    // TODO: Implement actual PDF generation
-    res.status(200).json({
-      success: true,
-      message: 'Teacher ID card generation initiated',
-      data: {
-        teacherId: teacher._id,
-        teacherName: teacher.name,
-        templateId: template._id,
-        templateName: template.name || 'Default Template',
-        cardUrl: null // Placeholder
+    // Generate PDFs for all students in-memory
+    const pdfBuffers = [];
+
+    for (const student of students) {
+      try {
+        // Generate card data (returns plain JSON object, not Mongoose document)
+        const cardData = await generateStudentCardData(
+          student._id.toString(),
+          template._id.toString(),
+          effectiveSchoolId
+        );
+
+        // Ensure cardData is a plain object (not Mongoose document)
+        // generateStudentCardData already returns plain object, but double-check for safety
+        const plainCardData = {
+          templateId: String(cardData.templateId),
+          templateType: String(cardData.templateType),
+          layoutConfig: cardData.layoutConfig,
+          data: { ...cardData.data }
+        };
+
+        // Generate PDF buffer (in-memory, no disk writes)
+        const pdfBuffer = await generatePdf(plainCardData);
+
+        pdfBuffers.push({
+          buffer: pdfBuffer,
+          studentId: student._id.toString(),
+          studentName: student.name || `Student-${student._id.toString().substring(0, 8)}`,
+          admissionNo: student.admissionNo || ''
+        });
+      } catch (error) {
+        // Fail entire request if any student's card generation fails
+        return res.status(400).json({
+          success: false,
+          message: `Failed to generate card for student ${student._id.toString()}: ${error.message}`
+        });
       }
+    }
+
+    if (pdfBuffers.length === 0) {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to generate PDFs for any students'
+      });
+    }
+
+    // Create ZIP archive in-memory
+    const archive = archiver('zip', {
+      zlib: { level: 9 } // Maximum compression
     });
+
+    // Collect ZIP chunks into buffer
+    const zipChunks = [];
+    archive.on('data', (chunk) => {
+      zipChunks.push(chunk);
+    });
+
+    // Wait for ZIP to complete
+    await new Promise((resolve, reject) => {
+      archive.on('end', resolve);
+      archive.on('error', reject);
+
+      // Add each PDF to ZIP with descriptive filename
+      pdfBuffers.forEach(({ buffer, studentId, studentName, admissionNo }) => {
+        // Create safe filename
+        const safeName = (studentName || 'Student').replace(/[^a-zA-Z0-9]/g, '_');
+        const filename = admissionNo 
+          ? `${admissionNo}_${safeName}.pdf`
+          : `${studentId.substring(0, 8)}_${safeName}.pdf`;
+        
+        archive.append(buffer, { name: filename });
+      });
+
+      // Finalize ZIP
+      archive.finalize();
+    });
+
+    const zipBuffer = Buffer.concat(zipChunks);
+
+    // Fire-and-forget audit logging for each student in bulk PDF generation
+    try {
+      const logPromises = students.map(student =>
+        CardLog.create({
+          userId: req.user.id,
+          role: req.user.role,
+          schoolId: effectiveSchoolId,
+          sessionId: activeSession._id,
+          templateId: template._id,
+          entityType: 'STUDENT',
+          entityId: student._id,
+          timestamp: new Date()
+        })
+      );
+
+      Promise.all(logPromises).catch(() => {
+        // Silently fail audit logging - do not affect response
+      });
+    } catch {
+      // Silently fail audit logging preparation - do not affect response
+    }
+
+    // Set correct headers for ZIP response
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="student-cards-${Date.now()}.zip"`);
+
+    // Send ZIP buffer
+    res.status(200).send(zipBuffer);
   } catch (error) {
+    if (error.message.includes('No active session found')) {
+      return res.status(400).json({
+        success: false,
+        message: error.message
+      });
+    }
+    next(error);
+  }
+});
+
+/**
+ * Generate a single combined PDF for multiple students (one page per student)
+ * Teachers are blocked at the route level via requireRole
+ */
+const generateBulkStudentCardsCombinedPdf = asyncHandler(async (req, res, next) => {
+  const { studentIds, templateId } = req.body;
+
+  // Validate input
+  if (!studentIds || !Array.isArray(studentIds) || studentIds.length === 0) {
+    return res.status(400).json({
+      success: false,
+      message: 'studentIds array is required and must not be empty'
+    });
+  }
+
+  if (studentIds.length > MAX_BULK_STUDENTS) {
+    return res.status(400).json({
+      success: false,
+      message: `Bulk operation limit exceeded. Maximum ${MAX_BULK_STUDENTS} students per request are allowed.`,
+      receivedCount: studentIds.length
+    });
+  }
+
+  const invalidIds = studentIds.filter(id => !mongoose.Types.ObjectId.isValid(id));
+  if (invalidIds.length > 0) {
+    return res.status(400).json({
+      success: false,
+      message: `Invalid student ID format(s): ${invalidIds.join(', ')}`
+    });
+  }
+
+  // Get schoolId from req.user context
+  let effectiveSchoolId;
+  try {
+    effectiveSchoolId = getSchoolIdForOperation(req);
+  } catch (error) {
+    return res.status(400).json({
+      success: false,
+      message: error.message
+    });
+  }
+
+  try {
+    // Active session enforced via middleware; reuse if available
+    const activeSession = req.activeSession || (await getActiveSession(effectiveSchoolId));
+
+    // Fetch students (school + active session scoped)
+    const students = await Student.find({
+      _id: { $in: studentIds },
+      schoolId: effectiveSchoolId,
+      sessionId: activeSession._id
+    })
+      .populate('classId', 'className sessionId')
+      .populate('sessionId', 'sessionName activeStatus');
+
+    if (students.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No valid students found for the provided IDs in the active session and school'
+      });
+    }
+
+    // Fail entire request if ANY student missing/invalid
+    if (students.length !== studentIds.length) {
+      const foundIdsSet = new Set(students.map(s => s._id.toString()));
+      const missingIds = studentIds
+        .map(id => id.toString())
+        .filter(id => !foundIdsSet.has(id));
+
+      return res.status(400).json({
+        success: false,
+        message: 'One or more students are invalid, do not belong to this school, or are not in the active session',
+        invalidStudentIds: missingIds
+      });
+    }
+
+    // Validate template
+    let template;
+    if (templateId) {
+      template = await Template.findById(templateId);
+      if (!template) {
+        return res.status(404).json({
+          success: false,
+          message: 'Template not found'
+        });
+      }
+      if (!isSuperadmin(req.user) && template.schoolId.toString() !== effectiveSchoolId.toString()) {
+        return res.status(403).json({
+          success: false,
+          message: 'Template does not belong to your school'
+        });
+      }
+      if (template.sessionId.toString() !== activeSession._id.toString()) {
+        return res.status(400).json({
+          success: false,
+          message: 'Template does not belong to the active session'
+        });
+      }
+    } else {
+      const { getActiveTemplate } = require('../services/template.service');
+      template = await getActiveTemplate(effectiveSchoolId, activeSession._id, 'STUDENT');
+      if (!template) {
+        return res.status(404).json({
+          success: false,
+          message: 'No active template found for STUDENT type'
+        });
+      }
+    }
+
+    // Build render data list (one per student)
+    const renderList = [];
+
+    for (const student of students) {
+      const cardData = await generateStudentCardData(
+        student._id.toString(),
+        template._id.toString(),
+        effectiveSchoolId
+      );
+
+      renderList.push({
+        layoutConfig: cardData.layoutConfig,
+        data: { ...cardData.data }
+      });
+    }
+
+    // Generate combined PDF (one page per student) in-memory
+    const pdfBuffer = await generatePdf(renderList);
+
+    // Set headers
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'inline; filename="student-cards.pdf"');
+
+    res.status(200).send(pdfBuffer);
+  } catch (error) {
+    if (error.message.includes('No active session found')) {
+      return res.status(400).json({
+        success: false,
+        message: error.message
+      });
+    }
     next(error);
   }
 });
@@ -450,6 +1120,12 @@ const generateTeacherCard = asyncHandler(async (req, res, next) => {
 module.exports = {
   generateStudentCard,
   generateBulkStudentCards,
-  generateTeacherCard
+  generateTeacherCard,
+  generateStudentCardPDF,
+  generateTeacherCardPDF,
+  generateBulkStudentCardsPDF,
+  generateStudentCardPdfById,
+  generateTeacherCardPdfById,
+  generateBulkStudentCardsCombinedPdf
 };
 

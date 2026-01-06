@@ -1,169 +1,172 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const env = require('../config/env');
-const { isSuperadmin, isTeacher } = require('../utils/roleGuards');
+const asyncHandler = require('../utils/asyncHandler');
 
-// Note: dotenv should already be loaded in server.js
-// Use env.jwtSecret instead of process.env.JWT_SECRET for consistency
-
-// @desc    Protect routes
+// @desc    Authenticate user via JWT token
 // @route   Middleware
 // @access  Private
-// Validates JWT token and enforces edge case checks:
-// - Expired tokens are rejected with specific error
-// - Disabled users are rejected even with valid token
-// - Deleted users are rejected even with valid token
-// - Role changes are detected (token role must match database role)
-const authMiddleware = async (req, res, next) => {
-  let token;
+// Validates JWT token and verifies user exists and is active
+const authMiddleware = asyncHandler(async (req, res, next) => {
+  console.log('[AUTH] ===== MIDDLEWARE HIT =====');
+  console.log('[AUTH] Path:', req.path);
+  console.log('[AUTH] Method:', req.method);
+  
+  try {
+    // STEP 1: Check Authorization header
+    console.log('[AUTH] STEP 1: Checking Authorization header');
+    const authHeader = req.headers.authorization;
+    console.log('[AUTH] Authorization header exists:', !!authHeader);
+    console.log('[AUTH] Authorization header value:', authHeader ? authHeader.substring(0, 20) + '...' : 'MISSING');
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.log('[AUTH] ❌ FAIL: No Authorization header or not Bearer token');
+      return res.status(401).json({
+        success: false,
+        message: 'Not authorized, no token'
+      });
+    }
 
-  // Check for token in headers
-  if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+    // STEP 2: Extract token
+    console.log('[AUTH] STEP 2: Extracting token from header');
+    const token = authHeader.split(' ')[1];
+    console.log('[AUTH] Token extracted:', token ? token.substring(0, 20) + '...' : 'MISSING');
+    
+    if (!token) {
+      console.log('[AUTH] ❌ FAIL: Token missing after split');
+      return res.status(401).json({
+        success: false,
+        message: 'Not authorized, no token'
+      });
+    }
+
+    // STEP 3: Verify JWT_SECRET exists
+    console.log('[AUTH] STEP 3: Checking JWT_SECRET');
+    console.log('[AUTH] JWT_SECRET exists:', !!env.jwtSecret);
+    console.log('[AUTH] JWT_SECRET length:', env.jwtSecret ? env.jwtSecret.length : 0);
+    
+    if (!env.jwtSecret) {
+      console.log('[AUTH] ❌ FAIL: JWT_SECRET not configured');
+      return res.status(500).json({
+        success: false,
+        message: 'Server configuration error: JWT_SECRET not configured'
+      });
+    }
+
+    // STEP 4: Verify JWT token
+    console.log('[AUTH] STEP 4: Verifying JWT token');
+    let decoded;
     try {
-      // Get token from header
-      token = req.headers.authorization.split(' ')[1];
-
-      // Verify token (this will throw TokenExpiredError if expired)
-      // env.jwtSecret should be validated at startup, but check here as fallback
-      if (!env.jwtSecret) {
-        return res.status(500).json({
-          success: false,
-          message: 'Server configuration error: JWT_SECRET not configured'
-        });
-      }
-      const decoded = jwt.verify(token, env.jwtSecret);
-
-      // Edge case validation: Verify user still exists and is active
-      const user = await User.findById(decoded.user.id).select('status role schoolId');
-      
-      if (!user) {
-        return res.status(401).json({
-          success: false,
-          message: 'User account no longer exists'
-        });
-      }
-
-      // Edge case validation: Check if user is disabled
-      if (user.status !== 'active') {
-        return res.status(401).json({
-          success: false,
-          message: 'Account is inactive. Please contact an administrator.'
-        });
-      }
-
-      // Edge case validation: Verify role hasn't changed (token role must match database role)
-      if (user.role !== decoded.user.role) {
-        return res.status(401).json({
-          success: false,
-          message: 'Your account role has changed. Please log in again.'
-        });
-      }
-
-      // Edge case validation: Verify schoolId hasn't changed for non-superadmin users
-      if (!isSuperadmin({ role: user.role })) {
-        const tokenSchoolId = decoded.user.schoolId ? decoded.user.schoolId.toString() : null;
-        const dbSchoolId = user.schoolId ? user.schoolId.toString() : null;
-        
-        if (tokenSchoolId !== dbSchoolId) {
-          return res.status(401).json({
-            success: false,
-            message: 'Your school assignment has changed. Please log in again.'
-          });
-        }
-      }
-
-      // Attach user data to request (use database values, not token values)
-      // Standardized structure: id, role, schoolId (null for Superadmin)
-      req.user = {
-        id: user._id.toString(), // Ensure string format
-        role: user.role, // 'Superadmin', 'Schooladmin', or 'Teacher'
-        schoolId: user.schoolId ? user.schoolId.toString() : null // null for Superadmin, string for others
-      };
-      
-      next();
-    } catch (error) {
-      // Handle specific JWT errors
-      if (error.name === 'TokenExpiredError') {
+      decoded = jwt.verify(token, env.jwtSecret);
+      console.log('[AUTH] ✅ JWT verified successfully');
+      console.log('[AUTH] Decoded payload:', JSON.stringify(decoded, null, 2));
+    } catch (jwtError) {
+      console.log('[AUTH] ❌ FAIL: JWT verification error:', jwtError.name, jwtError.message);
+      if (jwtError.name === 'TokenExpiredError') {
         return res.status(401).json({
           success: false,
           message: 'Token has expired. Please log in again.'
         });
       }
-      
-      if (error.name === 'JsonWebTokenError') {
+      if (jwtError.name === 'JsonWebTokenError') {
         return res.status(401).json({
           success: false,
           message: 'Invalid token. Please log in again.'
         });
       }
-      
-      console.error('Auth middleware error:', error);
       return res.status(401).json({
         success: false,
-        message: 'Authentication failed'
+        message: 'Authentication failed: ' + jwtError.message
       });
     }
-  }
 
-  if (!token) {
-    return res.status(401).json({
-      success: false,
-      message: 'Not authorized, no token'
-    });
-  }
-};
-
-// @desc    Role-based access control
-// @route   Middleware
-// @access  Private
-const roleMiddleware = (...roles) => {
-  return (req, res, next) => {
-    if (!req.user) {
+    // STEP 5: Check decoded.user.id exists
+    console.log('[AUTH] STEP 5: Checking decoded.user.id');
+    console.log('[AUTH] decoded.user exists:', !!decoded.user);
+    console.log('[AUTH] decoded.user.id:', decoded.user?.id);
+    console.log('[AUTH] decoded.user.role:', decoded.user?.role);
+    console.log('[AUTH] decoded.user.schoolId:', decoded.user?.schoolId);
+    
+    if (!decoded.user || !decoded.user.id) {
+      console.log('[AUTH] ❌ FAIL: decoded.user.id does not exist');
       return res.status(401).json({
         success: false,
-        message: 'Authentication required'
+        message: 'Invalid token payload'
       });
     }
 
-    if (!roles.includes(req.user.role)) {
-      return res.status(403).json({
+    // STEP 6: Fetch user from database
+    console.log('[AUTH] STEP 6: Fetching user from database');
+    console.log('[AUTH] Searching for user ID:', decoded.user.id);
+    const user = await User.findById(decoded.user.id).select('status role schoolId');
+    console.log('[AUTH] User query result:', user ? {
+      _id: user._id?.toString(),
+      status: user.status,
+      role: user.role,
+      schoolId: user.schoolId?.toString()
+    } : 'NOT FOUND');
+    
+    if (!user) {
+      console.log('[AUTH] ❌ FAIL: User not found in database');
+      return res.status(401).json({
         success: false,
-        message: `Role '${req.user.role}' is not authorized to access this route`
+        message: 'User account no longer exists'
       });
     }
 
-    next();
-  };
-};
+    // STEP 7: Check user status
+    console.log('[AUTH] STEP 7: Checking user status');
+    console.log('[AUTH] user.status:', user.status);
+    console.log('[AUTH] user.status === "ACTIVE":', user.status === 'ACTIVE');
+    
+    if (user.status !== 'ACTIVE') {
+      console.log('[AUTH] ❌ FAIL: User status is not ACTIVE');
+      return res.status(401).json({
+        success: false,
+        message: 'Account is inactive. Please contact an administrator.'
+      });
+    }
 
-// @desc    Block teachers from delete operations (defense-in-depth)
-// @route   Middleware
-// @access  Private
-// This middleware explicitly blocks teachers from DELETE operations
-// Teachers can create and update students in their assigned class (when not frozen)
-// It serves as an additional security layer beyond roleMiddleware
-const blockTeachersFromDeletes = (req, res, next) => {
-  if (!req.user) {
+    // STEP 8: Set req.user
+    console.log('[AUTH] STEP 8: Setting req.user');
+    req.user = {
+      id: user._id.toString(),
+      role: user.role,
+      schoolId: user.schoolId ? user.schoolId.toString() : null
+    };
+    console.log('[AUTH] ✅ req.user set:', JSON.stringify(req.user, null, 2));
+    
+    // STEP 9: Call next()
+    console.log('[AUTH] STEP 9: Calling next()');
+    console.log('[AUTH] ===== MIDDLEWARE SUCCESS =====');
+    return next();
+  } catch (error) {
+    console.log('[AUTH] ===== MIDDLEWARE ERROR =====');
+    console.log('[AUTH] Error name:', error.name);
+    console.log('[AUTH] Error message:', error.message);
+    console.log('[AUTH] Error stack:', error.stack);
+    
+    // Handle specific JWT errors
+    if (error.name === 'TokenExpiredError') {
+      return res.status(401).json({
+        success: false,
+        message: 'Token has expired. Please log in again.'
+      });
+    }
+    
+    if (error.name === 'JsonWebTokenError') {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid token. Please log in again.'
+      });
+    }
+    
+    console.error('[AUTH] Unexpected auth middleware error:', error);
     return res.status(401).json({
       success: false,
-      message: 'Authentication required'
+      message: 'Authentication failed'
     });
   }
+});
 
-  // Block teachers from DELETE operations only
-  if (isTeacher(req.user) && req.method === 'DELETE') {
-    return res.status(403).json({
-      success: false,
-      message: 'Teachers cannot delete students. Only administrators can delete students.'
-    });
-  }
-
-  next();
-};
-
-module.exports = {
-  authMiddleware,
-  roleMiddleware,
-  blockTeachersFromMutations: blockTeachersFromDeletes, // Keep old name for backward compatibility
-  blockTeachersFromDeletes
-};
+module.exports = authMiddleware;

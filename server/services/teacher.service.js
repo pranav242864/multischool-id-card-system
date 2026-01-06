@@ -87,7 +87,7 @@ const createTeacher = async (teacherData) => {
   const existingTeacher = await Teacher.findOne({
     email: teacherData.email,
     schoolId: teacherData.schoolId,
-    status: 'active' // Only check active teachers
+    status: 'ACTIVE' // Only check active teachers (enum value is uppercase)
   });
 
   if (existingTeacher) {
@@ -247,7 +247,7 @@ const updateTeacher = async (teacherId, updateData, schoolId, userRole = null, u
   const teacher = await Teacher.findOne({
     _id: teacherId,
     schoolId: schoolId, // STRICT: Filter by schoolId to prevent cross-school access
-    status: 'active' // Only check active teachers
+    status: 'ACTIVE' // Only check active teachers (enum value is uppercase)
   });
   
   if (!teacher) {
@@ -499,7 +499,7 @@ const deleteTeacher = async (teacherId, schoolId) => {
   const teacher = await Teacher.findOne({
     _id: teacherId,
     schoolId: schoolId, // STRICT: Filter by schoolId to prevent cross-school access
-    status: 'active' // Only check active teachers
+    status: 'ACTIVE' // Only check active teachers (enum value is uppercase)
   });
   
   if (!teacher) {

@@ -5,7 +5,6 @@ const rateLimit = require('express-rate-limit');
 const env = require('./config/env');
 const connectDB = require('./config/db');
 const errorHandler = require('./middleware/errorHandler');
-const { enforceSchoolScoping } = require('./middleware/schoolScoping');
 
 // Route files
 const healthRoutes = require('./routes/healthRoutes');
@@ -60,12 +59,14 @@ app.use('/api/auth', authRoutes); // Public routes: /login, /google, /forgot-pas
 app.use('/api/v1/auth', authRoutes); // Same routes, versioned
 app.use('/api/v1/templates', templateRoutes); // Protected (has authMiddleware in route file)
 app.use('/api/v1/bulk-import', bulkImportRoutes); // Protected (has authMiddleware in route file)
-app.use('/api', enforceSchoolScoping, sessionRoutes); // Protected + school scoping
-app.use('/api', enforceSchoolScoping, classRoutes); // Protected + school scoping
-app.use('/api', enforceSchoolScoping, studentRoutes); // Protected + school scoping
-app.use('/api', enforceSchoolScoping, teacherRoutes); // Protected + school scoping
-app.use('/api/v1/cards', enforceSchoolScoping, cardRoutes); // Protected + school scoping
+app.use('/api/v1/classes', classRoutes); // Protected (has authMiddleware in route file)
+app.use('/api/v1/sessions', sessionRoutes); // Protected (has authMiddleware in route file)
+app.use('/api/v1/students', studentRoutes); // Protected (has authMiddleware in route file)
+app.use('/api/v1/teachers', teacherRoutes); // Protected (has authMiddleware in route file)
+app.use('/api/v1/cards', cardRoutes); // Protected (has authMiddleware in route file)
 app.use('/api/v1', schoolRoutes); // Protected (has authMiddleware in route file)
+
+console.log('[APP] Routes mounted');
 
 // Handle 404 for undefined routes
 app.all('*', (req, res) => {

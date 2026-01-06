@@ -35,7 +35,7 @@ const createStudent = async (studentData) => {
     admissionNo: studentData.admissionNo,
     schoolId: studentData.schoolId,
     sessionId: activeSession._id,
-    status: 'active' // Only check active students
+    status: 'ACTIVE' // Only check active students (enum value is uppercase)
   });
 
   if (existingStudent) {
@@ -83,7 +83,7 @@ const getStudents = async (schoolId, classId = null, page = 1, limit = 10) => {
   let filter = {
     schoolId: schoolId,
     sessionId: activeSession._id, // Only show students from active session
-    status: 'active' // Only show active students
+      status: 'ACTIVE' // Only show active students (enum value is uppercase)
   };
   
   if (classId) {
@@ -158,7 +158,7 @@ const updateStudent = async (studentId, updateData, schoolId, userRole = null) =
   const student = await Student.findOne({
     _id: studentId,
     schoolId: schoolId, // STRICT: Filter by schoolId to prevent cross-school access
-    status: 'active' // Only check active students
+    status: 'ACTIVE' // Only check active students (enum value is uppercase)
   }).populate('sessionId', 'activeStatus archived');
   
   if (!student) {
@@ -167,7 +167,9 @@ const updateStudent = async (studentId, updateData, schoolId, userRole = null) =
   }
 
   // Prevent modifications to students from inactive sessions
-  if (student.sessionId.toString() !== activeSession._id.toString()) {
+  // When sessionId is populated, it's a Session document, so use ._id to get the ObjectId
+  const studentSessionId = student.sessionId._id ? student.sessionId._id.toString() : student.sessionId.toString();
+  if (studentSessionId !== activeSession._id.toString()) {
     // Check if the student's session is archived
     if (student.sessionId && student.sessionId.archived) {
       throw new Error('Cannot modify student from an archived session. Archived sessions are read-only.');
@@ -217,7 +219,7 @@ const updateStudent = async (studentId, updateData, schoolId, userRole = null) =
       admissionNo: updateData.admissionNo,
       schoolId: schoolId,
       sessionId: activeSession._id,
-      status: 'active', // Only check active students
+      status: 'ACTIVE', // Only check active students (enum value is uppercase)
       _id: { $ne: student._id } // Exclude current student from check
     });
 
@@ -278,7 +280,7 @@ const deleteStudent = async (studentId, schoolId) => {
   const student = await Student.findOne({
     _id: studentId,
     schoolId: schoolId, // STRICT: Filter by schoolId to prevent cross-school access
-    status: 'active' // Only check active students
+    status: 'ACTIVE' // Only check active students (enum value is uppercase)
   }).populate('sessionId', 'activeStatus archived');
   
   if (!student) {

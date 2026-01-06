@@ -430,6 +430,20 @@ const updateStudent = asyncHandler(async (req, res, next) => {
       // ENFORCE: Frozen classes cannot have students updated
       // For Schooladmin and Superadmin: Check if class is frozen before updating
       // Service layer also validates, but this provides early feedback
+      // First, get the student to find their classId
+      const Student = require('../models/Student');
+      const student = await Student.findOne({
+        _id: studentId,
+        schoolId: schoolId
+      });
+      
+      if (!student) {
+        return res.status(404).json({
+          success: false,
+          message: 'Student not found'
+        });
+      }
+      
       const Class = require('../models/Class');
       const studentClass = await Class.findById(student.classId);
       if (studentClass && studentClass.frozen) {

@@ -6,8 +6,7 @@ const User = require('../models/User');
 const AllowedLogin = require('../models/AllowedLogin');
 const PasswordResetToken = require('../models/PasswordResetToken');
 const LoginLog = require('../models/LoginLog');
-const { authMiddleware, roleMiddleware } = require('../middleware/authMiddleware');
-const { isSchooladmin, isTeacher } = require('../utils/roleGuards');
+const authMiddleware = require('../middleware/authMiddleware');
 const { logLoginAttempt, getClientIp } = require('../utils/loginLogger');
 
 const router = express.Router();
@@ -52,7 +51,7 @@ router.post('/register-superadmin', async (req, res) => {
     }
 
     // Enforce one-superadmin rule
-    const existingSuperadmin = await User.findOne({ role: 'Superadmin', status: 'active' });
+    const existingSuperadmin = await User.findOne({ role: 'SUPERADMIN', status: 'ACTIVE' });
     if (existingSuperadmin) {
       return res.status(403).json({
         success: false,
@@ -95,8 +94,8 @@ router.post('/register-superadmin', async (req, res) => {
       email: email.toLowerCase(),
       username: username,
       passwordHash: passwordHash,
-      role: 'Superadmin',
-      status: 'active'
+      role: 'SUPERADMIN',
+      status: 'ACTIVE'
       // schoolId is not required for Superadmin (handled by schema)
     });
 
@@ -207,7 +206,7 @@ router.post('/login', async (req, res) => {
     }
 
     // Check if user is active
-    if (user.status !== 'active') {
+    if (user.status !== 'ACTIVE') {
       failureReason = 'inactive_account';
       await logLoginAttempt({
         email: user.email,
@@ -227,7 +226,7 @@ router.post('/login', async (req, res) => {
     }
 
     // Check if login is allowed based on role and school
-    if (user.role.toLowerCase() !== 'superadmin') {
+    if (user.role !== 'SUPERADMIN') {
       if (!user.schoolId) {
         await logLoginAttempt({
           email: user.email,
@@ -259,7 +258,7 @@ router.post('/login', async (req, res) => {
         // No need to check permissions as defaults allow all
       } else {
         // Check permissions only if record exists
-      if (isSchooladmin({ role: user.role }) && !allowedLogin.allowSchoolAdmin) {
+      if (user.role === 'SCHOOLADMIN' && !allowedLogin.allowSchoolAdmin) {
           failureReason = 'login_disabled';
           await logLoginAttempt({
             email: user.email,
@@ -278,7 +277,7 @@ router.post('/login', async (req, res) => {
         });
       }
 
-      if (isTeacher({ role: user.role }) && !allowedLogin.allowTeacher) {
+      if (user.role === 'TEACHER' && !allowedLogin.allowTeacher) {
           failureReason = 'login_disabled';
           await logLoginAttempt({
             email: user.email,
@@ -422,12 +421,12 @@ router.post('/login', async (req, res) => {
     }
 
     // Create JWT payload - Standardized structure
-    // Must include: user.id, user.role, user.schoolId (null for Superadmin)
+    // Must include: user.id, user.role, user.schoolId (null for SUPERADMIN)
     const payload = {
       user: {
         id: user._id.toString(), // Ensure string format
-        role: user.role, // 'Superadmin', 'Schooladmin', or 'Teacher'
-        schoolId: user.schoolId ? user.schoolId._id.toString() : null // null for Superadmin, string for others
+        role: user.role, // Use exact database value: 'SUPERADMIN', 'SCHOOLADMIN', or 'TEACHER'
+        schoolId: user.schoolId ? user.schoolId._id.toString() : null // null for SUPERADMIN, string for others
       }
     };
 
@@ -559,7 +558,7 @@ router.get('/me', authMiddleware, async (req, res) => {
     }
 
     // Verify user is still active (defense-in-depth)
-    if (user.status !== 'active') {
+    if (user.status !== 'ACTIVE') {
       return res.status(401).json({
         success: false,
         message: 'Account is inactive. Please contact an administrator.'
@@ -633,7 +632,7 @@ router.post('/google', async (req, res) => {
     }
 
     // Check if user is active
-    if (user.status !== 'active') {
+    if (user.status !== 'ACTIVE') {
       await logLoginAttempt({
         email: user.email,
         username: user.username,
@@ -652,7 +651,7 @@ router.post('/google', async (req, res) => {
     }
 
     // Check if login is allowed based on role and school
-    if (user.role.toLowerCase() !== 'superadmin') {
+    if (user.role !== 'SUPERADMIN') {
       if (!user.schoolId) {
         await logLoginAttempt({
           email: user.email,
@@ -682,7 +681,7 @@ router.post('/google', async (req, res) => {
         // Continue with login using default permissions
       } else {
         // Check permissions only if record exists
-        if (isSchooladmin({ role: user.role }) && !allowedLogin.allowSchoolAdmin) {
+        if (user.role === 'SCHOOLADMIN' && !allowedLogin.allowSchoolAdmin) {
           await logLoginAttempt({
             email: user.email,
             username: user.username,
@@ -700,7 +699,7 @@ router.post('/google', async (req, res) => {
           });
         }
 
-        if (isTeacher({ role: user.role }) && !allowedLogin.allowTeacher) {
+        if (user.role === 'TEACHER' && !allowedLogin.allowTeacher) {
           await logLoginAttempt({
             email: user.email,
             username: user.username,
@@ -721,12 +720,12 @@ router.post('/google', async (req, res) => {
     }
 
     // Create JWT payload - Standardized structure
-    // Must include: user.id, user.role, user.schoolId (null for Superadmin)
+    // Must include: user.id, user.role, user.schoolId (null for SUPERADMIN)
     const payload = {
       user: {
         id: user._id.toString(), // Ensure string format
-        role: user.role, // 'Superadmin', 'Schooladmin', or 'Teacher'
-        schoolId: user.schoolId ? user.schoolId._id.toString() : null // null for Superadmin, string for others
+        role: user.role, // Use exact database value: 'SUPERADMIN', 'SCHOOLADMIN', or 'TEACHER'
+        schoolId: user.schoolId ? user.schoolId._id.toString() : null // null for SUPERADMIN, string for others
       }
     };
 
@@ -838,7 +837,7 @@ router.post('/forgot-password', async (req, res) => {
     }
 
     // Check if user is active
-    if (user.status !== 'active') {
+    if (user.status !== 'ACTIVE') {
       return res.status(200).json({
         success: true,
         message: 'If an account with that email exists, a password reset link has been sent.'
@@ -960,7 +959,7 @@ router.post('/reset-password', async (req, res) => {
 // @desc    Get login logs (Superadmin only)
 // @route   GET /auth/login-logs
 // @access  Private (Superadmin only)
-router.get('/login-logs', authMiddleware, roleMiddleware('Superadmin'), async (req, res) => {
+router.get('/login-logs', authMiddleware, async (req, res) => {
   try {
     const { page = 1, limit = 50, schoolId, role, success, startDate, endDate } = req.query;
 
@@ -1026,16 +1025,16 @@ router.get('/login-logs', authMiddleware, roleMiddleware('Superadmin'), async (r
 // @desc    Get login permissions for a school
 // @route   GET /auth/login-permissions/:schoolId
 // @access  Private (Superadmin, Schooladmin)
-router.get('/login-permissions/:schoolId', authMiddleware, roleMiddleware('Superadmin', 'Schooladmin'), require('../controllers/allowedLogin.controller').getLoginPermissions);
+router.get('/login-permissions/:schoolId', authMiddleware, require('../controllers/allowedLogin.controller').getLoginPermissions);
 
 // @desc    Get login permissions for all schools (Superadmin only)
 // @route   GET /auth/login-permissions
 // @access  Private (Superadmin only)
-router.get('/login-permissions', authMiddleware, roleMiddleware('Superadmin'), require('../controllers/allowedLogin.controller').getAllLoginPermissions);
+router.get('/login-permissions', authMiddleware, require('../controllers/allowedLogin.controller').getAllLoginPermissions);
 
 // @desc    Update login permissions for a school
 // @route   PATCH /auth/login-permissions/:schoolId
 // @access  Private (Superadmin, Schooladmin)
-router.patch('/login-permissions/:schoolId', authMiddleware, roleMiddleware('Superadmin', 'Schooladmin'), require('../controllers/allowedLogin.controller').updateLoginPermissions);
+router.patch('/login-permissions/:schoolId', authMiddleware, require('../controllers/allowedLogin.controller').updateLoginPermissions);
 
 module.exports = router;

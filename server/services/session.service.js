@@ -325,8 +325,9 @@ const getActiveSession = async (schoolId) => {
   // Only check active sessions (exclude deleted/inactive)
   const activeSessions = await Session.find({
     schoolId: schoolId,
-    activeStatus: true,
-    status: 'active' // Only check active sessions
+    activeStatus: true
+    // Note: status field is for session lifecycle (ACTIVE/DISABLED), not for active session selection
+    // We only check activeStatus which indicates if this is the active session for the school
   });
 
   // Validate constraint: exactly one active session should exist

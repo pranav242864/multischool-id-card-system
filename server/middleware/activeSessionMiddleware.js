@@ -1,63 +1,57 @@
-const { getActiveSession } = require('../utils/sessionUtils');
-const { getSchoolIdForOperation } = require('../utils/getSchoolId');
+const Session = require('../models/Session');
+const { getSchoolIdForFilter } = require('../utils/getSchoolId');
 
-/**
- * Middleware to ensure an active session exists before allowing operations
- * This middleware validates that:
- * 1. An active session exists for the school
- * 2. The active session is not archived
- * 
- * Use this middleware on routes that require an active session for data operations
- * 
- * For Superadmin: requires schoolId in query parameter
- * For others: uses req.user.schoolId from JWT token
- */
 const requireActiveSession = async (req, res, next) => {
-  try {
-    // Get schoolId using standardized utility
-    // Superadmin must provide schoolId in query parameter
-    let schoolId;
-    try {
-      schoolId = getSchoolIdForOperation(req);
-    } catch (error) {
-      return res.status(400).json({
-        success: false,
-        message: error.message
-      });
-    }
-
-    // This will throw an error if no active session exists or if it's archived
-    const activeSession = await getActiveSession(schoolId);
-
-    // Attach active session to request for use in controllers
-    req.activeSession = activeSession;
-
-    next();
-  } catch (error) {
-    // Handle specific error messages
-    if (error.message.includes('No active session found')) {
-      return res.status(400).json({
-        success: false,
-        message: error.message
-      });
-    }
-
-    if (error.message.includes('archived')) {
-      return res.status(403).json({
-        success: false,
-        message: error.message
-      });
-    }
-
-    // Generic error
-    return res.status(500).json({
+  // Require req.user to exist
+  if (!req.user) {
+    return res.status(401).json({
       success: false,
-      message: 'Error validating active session'
+      message: 'Authentication required'
     });
   }
+
+  // Resolve schoolId
+  let schoolId;
+  try {
+    schoolId = getSchoolIdForFilter(req);
+  } catch (error) {
+    return res.status(400).json({
+      success: false,
+      message: error.message
+    });
+  }
+
+  // SUPERADMIN bypass - no active session required if schoolId is null
+  if (!schoolId) {
+    return next();
+  }
+
+  // Fetch active session for the school
+  const activeSession = await Session.findOne({
+    schoolId: schoolId,
+    activeStatus: true
+  });
+
+  // Reject if no active session exists
+  if (!activeSession) {
+    return res.status(403).json({
+      success: false,
+      message: 'No active session found for this school'
+    });
+  }
+
+  // Reject if active session is archived
+  if (activeSession.archived) {
+    return res.status(403).json({
+      success: false,
+      message: 'The active session is archived and cannot be used for data operations'
+    });
+  }
+
+  // Attach req.activeSession
+  req.activeSession = activeSession;
+
+  next();
 };
 
-module.exports = {
-  requireActiveSession
-};
-
+module.exports = requireActiveSession;

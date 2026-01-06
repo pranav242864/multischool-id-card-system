@@ -1,7 +1,42 @@
-const { deleteSchool, getSchools, getSchoolById } = require('../services/school.service');
+const { createSchool, deleteSchool, getSchools, getSchoolById } = require('../services/school.service');
 const asyncHandler = require('../utils/asyncHandler');
 const mongoose = require('mongoose');
 const { isSuperadmin } = require('../utils/roleGuards');
+
+/**
+ * Create a new school
+ * @route POST /api/v1/schools
+ * @access Private - Superadmin only
+ */
+const createSchoolController = asyncHandler(async (req, res, next) => {
+  const { name, address, contactEmail } = req.body;
+
+  // Validate required fields
+  if (!name || !address || !contactEmail) {
+    return res.status(400).json({
+      success: false,
+      message: 'Name, address, and contact email are required'
+    });
+  }
+
+  try {
+    const schoolData = {
+      name,
+      address,
+      contactEmail
+    };
+
+    const newSchool = await createSchool(schoolData);
+
+    res.status(201).json({
+      success: true,
+      message: 'School created successfully',
+      data: newSchool
+    });
+  } catch (error) {
+    next(error);
+  }
+});
 
 /**
  * Get all schools (only active schools)
@@ -135,6 +170,7 @@ const deleteSchoolController = asyncHandler(async (req, res, next) => {
 });
 
 module.exports = {
+  createSchool: createSchoolController,
   getAllSchools,
   getSchool,
   deleteSchool: deleteSchoolController

@@ -1,5 +1,8 @@
 const express = require('express');
-const { authMiddleware, roleMiddleware } = require('../middleware/authMiddleware');
+const authMiddleware = require('../middleware/authMiddleware');
+const requireRole = require('../middleware/requireRole');
+const schoolScoping = require('../middleware/schoolScoping');
+const activeSessionMiddleware = require('../middleware/activeSessionMiddleware');
 const { 
   createTeacher, 
   getTeachers, 
@@ -9,16 +12,21 @@ const {
 
 const router = express.Router();
 
-// POST /api/teachers - Create a teacher
-router.post('/teachers', authMiddleware, roleMiddleware('Superadmin', 'Schooladmin'), createTeacher);
+// Apply authentication and school scoping to all routes
+router.use(authMiddleware);
+router.use(schoolScoping);
 
-// GET /api/teachers - List teachers for current school
-router.get('/teachers', authMiddleware, roleMiddleware('Superadmin', 'Schooladmin', 'Teacher'), getTeachers);
+// POST /api/v1/teachers - Create a teacher
+router.post('/', requireRole('SUPERADMIN', 'SCHOOLADMIN'), activeSessionMiddleware, createTeacher);
 
-// PATCH /api/teachers/:id - Update teacher details
-router.patch('/teachers/:id', authMiddleware, roleMiddleware('Superadmin', 'Schooladmin', 'Teacher'), updateTeacher);
+// GET /api/v1/teachers - List teachers for current school
+router.get('/', requireRole('SUPERADMIN', 'SCHOOLADMIN', 'TEACHER'), activeSessionMiddleware, getTeachers);
 
-// DELETE /api/teachers/:id - Delete a teacher
-router.delete('/teachers/:id', authMiddleware, roleMiddleware('Superadmin', 'Schooladmin'), deleteTeacher);
+// PATCH /api/v1/teachers/:id - Update teacher details
+router.patch('/:id', requireRole('SUPERADMIN', 'SCHOOLADMIN', 'TEACHER'), activeSessionMiddleware, updateTeacher);
+
+// DELETE /api/v1/teachers/:id - Delete a teacher
+// Only SUPERADMIN can delete teachers
+router.delete('/:id', requireRole('SUPERADMIN'), activeSessionMiddleware, deleteTeacher);
 
 module.exports = router;

@@ -37,7 +37,7 @@ const validateClassNotFrozen = async (classId, schoolId, operation = 'modify') =
   const classObj = await Class.findOne({
     _id: classId,
     schoolId: schoolId, // STRICT: Filter by schoolId
-    status: 'active' // Only check active classes
+    status: 'ACTIVE' // Only check active classes (enum value is uppercase)
   });
   checkClassNotFrozen(classObj, operation);
   return classObj;
@@ -58,7 +58,7 @@ const createClass = async (classData) => {
     className: classData.className,
     schoolId: classData.schoolId,
     sessionId: activeSession._id,
-    status: 'active' // Only check active classes
+    status: 'ACTIVE' // Only check active classes (enum value is uppercase)
   });
 
   if (existingClass) {
@@ -92,22 +92,28 @@ const createClass = async (classData) => {
 
 // Get all classes for a school with optional session filter and pagination
 // Automatically filters by active session (sessionId parameter is ignored for consistency)
+// For SUPERADMIN: schoolId can be null to get all classes
 const getClasses = async (schoolId, sessionId = null, page = 1, limit = 10) => {
-  // Get the active session for the school (throws error if none exists)
-  const activeSession = await getActiveSession(schoolId);
-  
   const skip = (page - 1) * limit;
   
-  // Always filter by active session - ignore sessionId parameter to enforce active session only
   // Only return active classes (exclude deleted/inactive)
   const filter = { 
-    schoolId: schoolId,
-    sessionId: activeSession._id, // Only show classes from active session
     status: 'active' // Only show active classes
   };
 
+  // If schoolId is provided, filter by school and active session
+  if (schoolId) {
+    // Get the active session for the school (throws error if none exists)
+    const activeSession = await getActiveSession(schoolId);
+    filter.schoolId = schoolId;
+    filter.sessionId = activeSession._id; // Only show classes from active session
+  }
+  // If schoolId is null (SUPERADMIN without query param), return all active classes
+  // Note: This bypasses active session filtering for SUPERADMIN
+
   const classes = await Class.find(filter)
     .populate('sessionId', 'sessionName startDate endDate activeStatus')
+    .populate('schoolId', 'name')
     .sort({ className: 1 }) // Sort by class name alphabetically
     .skip(skip)
     .limit(parseInt(limit));
@@ -137,7 +143,7 @@ const freezeClass = async (classId, schoolId) => {
   const classObj = await Class.findOne({
     _id: classId,
     schoolId: schoolId, // STRICT: Filter by schoolId to prevent cross-school access
-    status: 'active' // Only check active classes
+    status: 'ACTIVE' // Only check active classes (enum value is uppercase)
   });
   
   if (!classObj) {
@@ -180,7 +186,9 @@ const unfreezeClass = async (classId, schoolId) => {
   }
 
   // Prevent unfreezing classes from inactive or archived sessions
-  if (classObj.sessionId.toString() !== activeSession._id.toString()) {
+  // When sessionId is populated, it's a Session document, so use ._id to get the ObjectId
+  const classSessionId = classObj.sessionId._id ? classObj.sessionId._id.toString() : classObj.sessionId.toString();
+  if (classSessionId !== activeSession._id.toString()) {
     // Check if the class's session is archived
     if (classObj.sessionId && classObj.sessionId.archived) {
       throw new Error('Cannot unfreeze class from an archived session. Archived sessions are read-only.');

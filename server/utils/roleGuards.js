@@ -20,7 +20,8 @@ function isSuperadmin(user) {
   if (!user || !user.role) {
     return false;
   }
-  return user.role === 'Superadmin';
+  // Handle both 'SUPERADMIN' (uppercase) and 'Superadmin' (mixed case) for compatibility
+  return user.role.toUpperCase() === 'SUPERADMIN';
 }
 
 /**
