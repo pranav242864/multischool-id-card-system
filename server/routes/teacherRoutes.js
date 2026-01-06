@@ -6,7 +6,8 @@ const {
   createTeacher, 
   getTeachers, 
   updateTeacher, 
-  deleteTeacher 
+  deleteTeacher,
+  bulkDeleteTeachers
 } = require('../controllers/teacher.controller');
 
 const router = express.Router();
@@ -27,5 +28,9 @@ router.patch('/:id', requireRole('SUPERADMIN', 'SCHOOLADMIN', 'TEACHER'), update
 // DELETE /api/v1/teachers/:id - Delete a teacher
 // Only SUPERADMIN can delete teachers
 router.delete('/:id', requireRole('SUPERADMIN'), deleteTeacher);
+
+// POST /api/v1/teachers/bulk-delete - Bulk delete teachers
+// Only SUPERADMIN can bulk delete teachers
+router.post('/bulk-delete', requireRole('SUPERADMIN'), bulkDeleteTeachers);
 
 module.exports = router;

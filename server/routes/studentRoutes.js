@@ -7,7 +7,8 @@ const {
   createStudent, 
   getStudents, 
   updateStudent, 
-  deleteStudent 
+  deleteStudent,
+  bulkDeleteStudents
 } = require('../controllers/student.controller');
 
 const router = express.Router();
@@ -31,5 +32,9 @@ router.patch('/students/:id', requireRole('SUPERADMIN', 'SCHOOLADMIN', 'TEACHER'
 // DELETE /api/students/:id - Delete a student
 // Teachers are blocked from deleting students (defense-in-depth)
 router.delete('/students/:id', requireRole('SUPERADMIN', 'SCHOOLADMIN'), activeSessionMiddleware, deleteStudent);
+
+// POST /api/v1/students/bulk-delete - Bulk delete students
+// Teachers are blocked from bulk deleting students (defense-in-depth)
+router.post('/bulk-delete', requireRole('SUPERADMIN', 'SCHOOLADMIN'), activeSessionMiddleware, bulkDeleteStudents);
 
 module.exports = router;

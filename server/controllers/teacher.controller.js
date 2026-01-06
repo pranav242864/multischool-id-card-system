@@ -444,9 +444,75 @@ const deleteTeacher = asyncHandler(async (req, res, next) => {
   }
 });
 
+// Bulk delete teachers
+const bulkDeleteTeachers = asyncHandler(async (req, res, next) => {
+  const { ids } = req.body;
+
+  // Validate ids is a non-empty array
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({
+      success: false,
+      message: 'ids must be a non-empty array'
+    });
+  }
+
+  // Get schoolId from req.user context (standardized)
+  // Superadmin must provide schoolId in query parameter
+  let schoolId;
+  try {
+    schoolId = getSchoolIdForOperation(req);
+  } catch (error) {
+    return res.status(400).json({
+      success: false,
+      message: error.message
+    });
+  }
+
+  const results = {
+    total: ids.length,
+    success: 0,
+    failed: 0,
+    errors: []
+  };
+
+  // Process each deletion
+  for (let i = 0; i < ids.length; i++) {
+    const teacherId = ids[i];
+    
+    // Validate ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(teacherId)) {
+      results.failed++;
+      results.errors.push({
+        id: teacherId,
+        error: 'Invalid teacher ID format'
+      });
+      continue;
+    }
+
+    try {
+      await deleteTeacherService(teacherId, schoolId);
+      results.success++;
+    } catch (error) {
+      results.failed++;
+      results.errors.push({
+        id: teacherId,
+        error: error.message || 'Failed to delete teacher'
+      });
+    }
+  }
+
+  // Return response matching bulk import format
+  res.status(200).json({
+    success: true,
+    message: `Bulk delete completed: ${results.success} successful, ${results.failed} failed`,
+    results: results
+  });
+});
+
 module.exports = {
   createTeacher,
   getTeachers,
   updateTeacher,
-  deleteTeacher
+  deleteTeacher,
+  bulkDeleteTeachers
 };

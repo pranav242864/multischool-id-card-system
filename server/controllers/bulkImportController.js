@@ -218,30 +218,94 @@ exports.importExcelData = [
             results.success++;
           } else if (entityType === 'teacher') {
             // Import teacher
-            // Ensure schoolId is set from resolved schoolId
+            if (!mappedData.email) {
+              throw new Error('Email is required');
+            }
+
+            if (!mappedData.name) {
+              throw new Error('Name is required');
+            }
+
+            if (!mappedData.mobile) {
+              throw new Error('Mobile is required');
+            }
+
             if (!mappedData.schoolId && schoolId) {
               mappedData.schoolId = schoolId;
             }
             if (!mappedData.schoolId) {
               throw new Error('School ID is required');
             }
-            
-            // Get the active session to validate class assignments
+
+            const existingUser = await User.findOne({ 
+              email: mappedData.email.toLowerCase(),
+              schoolId: mappedData.schoolId
+            });
+
+            if (existingUser) {
+              throw new Error('User already exists');
+            }
+
+            let finalUsername = mappedData.email.split('@')[0].toLowerCase();
+            const existingUsername = await User.findOne({ username: finalUsername, schoolId: mappedData.schoolId });
+            if (existingUsername) {
+              let counter = 1;
+              let newUsername = `${finalUsername}${counter}`;
+              while (await User.findOne({ username: newUsername, schoolId: mappedData.schoolId })) {
+                counter++;
+                newUsername = `${finalUsername}${counter}`;
+              }
+              finalUsername = newUsername;
+            }
+
+            const defaultPassword = 'Teacher123!';
+            const saltRounds = 10;
+            const passwordHash = await bcrypt.hash(defaultPassword, saltRounds);
+
+            const createdUser = await User.create({
+              name: mappedData.name.trim(),
+              email: mappedData.email.toLowerCase(),
+              username: finalUsername,
+              passwordHash,
+              role: 'TEACHER',
+              schoolId: mappedData.schoolId,
+              status: 'ACTIVE'
+            });
+
+            const userId = createdUser._id;
+
+            const teacherData = {
+              name: mappedData.name,
+              mobile: mappedData.mobile,
+              email: mappedData.email,
+              userId: userId,
+              schoolId: mappedData.schoolId,
+              status: 'ACTIVE'
+            };
+
+            if (mappedData.photoUrl) {
+              teacherData.photoUrl = mappedData.photoUrl;
+            }
+
+            if (mappedData.classId) {
+              teacherData.classId = mappedData.classId;
+            }
+
             const activeSession = await getActiveSession(mappedData.schoolId);
-            
-            // If classId is provided, verify it belongs to active session
+
             if (mappedData.classId) {
               const classObj = await Class.findById(mappedData.classId);
               if (!classObj) {
+                await User.findByIdAndDelete(userId);
                 throw new Error('Class not found');
               }
               if (classObj.sessionId.toString() !== activeSession._id.toString()) {
+                await User.findByIdAndDelete(userId);
                 throw new Error('Class does not belong to the active session');
               }
             }
-            
-            // Use the service to create teacher (which will validate and enforce active session)
-            const teacher = await createTeacherService(mappedData);
+
+            const teacher = await createTeacherService(teacherData);
             results.success++;
           } else if (entityType === 'admin') {
             // Import admin (create User with Schooladmin role)

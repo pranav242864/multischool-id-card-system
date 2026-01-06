@@ -588,9 +588,75 @@ const deleteStudent = asyncHandler(async (req, res, next) => {
   }
 });
 
+// Bulk delete students
+const bulkDeleteStudents = asyncHandler(async (req, res, next) => {
+  const { ids } = req.body;
+
+  // Validate ids is a non-empty array
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({
+      success: false,
+      message: 'ids must be a non-empty array'
+    });
+  }
+
+  // Get schoolId from req.user context (standardized)
+  // Superadmin must provide schoolId in query parameter
+  let schoolId;
+  try {
+    schoolId = getSchoolIdForOperation(req);
+  } catch (error) {
+    return res.status(400).json({
+      success: false,
+      message: error.message
+    });
+  }
+
+  const results = {
+    total: ids.length,
+    success: 0,
+    failed: 0,
+    errors: []
+  };
+
+  // Process each deletion
+  for (let i = 0; i < ids.length; i++) {
+    const studentId = ids[i];
+    
+    // Validate ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(studentId)) {
+      results.failed++;
+      results.errors.push({
+        id: studentId,
+        error: 'Invalid student ID format'
+      });
+      continue;
+    }
+
+    try {
+      await deleteStudentService(studentId, schoolId);
+      results.success++;
+    } catch (error) {
+      results.failed++;
+      results.errors.push({
+        id: studentId,
+        error: error.message || 'Failed to delete student'
+      });
+    }
+  }
+
+  // Return response matching bulk import format
+  res.status(200).json({
+    success: true,
+    message: `Bulk delete completed: ${results.success} successful, ${results.failed} failed`,
+    results: results
+  });
+});
+
 module.exports = {
   createStudent,
   getStudents,
   updateStudent,
-  deleteStudent
+  deleteStudent,
+  bulkDeleteStudents
 };

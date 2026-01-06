@@ -428,13 +428,9 @@ const updateTeacher = async (teacherId, updateData, schoolId, userRole = null, u
   }
 };
 
-// Delete a teacher (soft delete by setting status to inactive)
-// Prevents deactivation of teachers assigned to classes from inactive sessions
+// Delete a teacher (soft delete by setting status to DISABLED)
 // SECURITY: Enforces strict school scoping - schoolId must match
 const deleteTeacher = async (teacherId, schoolId) => {
-  // Get the active session for the school (throws error if none exists)
-  const activeSession = await getActiveSession(schoolId);
-  
   // Verify teacher exists - MUST filter by schoolId for security
   // Only check active teachers (exclude deleted/inactive)
   const teacher = await Teacher.findOne({
@@ -448,30 +444,23 @@ const deleteTeacher = async (teacherId, schoolId) => {
     throw new Error('Teacher not found');
   }
 
-  // If teacher has a class, verify it belongs to school and active session
+  // If teacher has a class, attempt to fetch it
+  // If class is not found, continue deletion anyway (don't block)
   if (teacher.classId) {
     // SECURITY: Filter by schoolId to prevent cross-school access
     const classObj = await Class.findOne({
       _id: teacher.classId,
       schoolId: schoolId, // STRICT: Filter by schoolId
       status: 'active' // Only check active classes
-    }).populate('sessionId', 'activeStatus archived');
+    });
     
-    if (!classObj) {
-      throw new Error('Class not found');
-    }
-    
-    if (classObj.sessionId.toString() !== activeSession._id.toString()) {
-      // Check if the class's session is archived
-      if (classObj.sessionId && classObj.sessionId.archived) {
-        throw new Error('Cannot delete teacher assigned to a class from an archived session. Archived sessions are read-only.');
-      }
-      throw new Error('Cannot delete teacher assigned to a class from an inactive session. Only teachers in the active session can be deleted.');
-    }
+    // If class is not found, continue deletion (don't block)
+    // This handles cases where class was deleted but teacher still references it
+    // Class lookup failures do not block teacher deletion
   }
 
-  // Instead of hard deleting, set status to inactive
-  teacher.status = 'inactive';
+  // Instead of hard deleting, set status to DISABLED
+  teacher.status = 'DISABLED';
   await teacher.save();
 
   return { message: 'Teacher deactivated successfully' };
