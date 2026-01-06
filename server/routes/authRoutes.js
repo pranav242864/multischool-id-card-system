@@ -187,8 +187,10 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    // Find user by email
-    user = await User.findOne({ email: email.toLowerCase() }).populate('schoolId');
+    // Find user by email (explicitly select passwordHash for authentication)
+    user = await User.findOne({ email: email.toLowerCase() })
+      .select('+passwordHash')
+      .populate('schoolId');
     if (!user) {
       // Log failed attempt
       await logLoginAttempt({
