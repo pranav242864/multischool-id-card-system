@@ -17,6 +17,7 @@ const studentRoutes = require('./routes/studentRoutes');
 const teacherRoutes = require('./routes/teacherRoutes');
 const cardRoutes = require('./routes/cardRoutes');
 const schoolRoutes = require('./routes/schoolRoutes');
+const userTeacherRoutes = require('./routes/userTeacherRoutes');
 
 // Connect to database
 // Note: This will throw and exit if connection fails (fail fast)
@@ -65,6 +66,7 @@ app.use('/api/v1/students', studentRoutes); // Protected (has authMiddleware in 
 app.use('/api/v1/teachers', teacherRoutes); // Protected (has authMiddleware in route file)
 app.use('/api/v1/cards', cardRoutes); // Protected (has authMiddleware in route file)
 app.use('/api/v1', schoolRoutes); // Protected (has authMiddleware in route file)
+app.use('/api/v1/users', userTeacherRoutes); // Protected (Superadmin-only teacher user creation)
 
 console.log('[APP] Routes mounted');
 

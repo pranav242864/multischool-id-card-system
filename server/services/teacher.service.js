@@ -112,12 +112,8 @@ const createTeacher = async (teacherData) => {
 };
 
 // Get all teachers for a school with optional class filter and pagination
-// Automatically filters to only show teachers assigned to classes in the active session
 // For teachers, only returns their own profile
 const getTeachers = async (schoolId, classId = null, page = 1, limit = 10, userRole = null, userEmail = null) => {
-  // Get the active session for the school (throws error if none exists)
-  const activeSession = await getActiveSession(schoolId);
-  
   // For Teacher role, enforce ownership - only return their own profile
   if (userRole === 'Teacher' && userEmail) {
     const teacher = await Teacher.findOne({
@@ -138,22 +134,6 @@ const getTeachers = async (schoolId, classId = null, page = 1, limit = 10, userR
       };
     }
     
-    // Verify teacher's class belongs to active session if they have a class
-    if (teacher.classId) {
-      if (teacher.classId.sessionId.toString() !== activeSession._id.toString()) {
-        // Teacher's class is not in active session, return empty result
-        return {
-          teachers: [],
-          pagination: {
-            page: 1,
-            limit: 1,
-            total: 0,
-            pages: 0
-          }
-        };
-      }
-    }
-    
     return {
       teachers: [teacher],
       pagination: {
@@ -167,47 +147,8 @@ const getTeachers = async (schoolId, classId = null, page = 1, limit = 10, userR
   
   const skip = (page - 1) * limit;
   
-  // Build filter - only teachers assigned to classes in the active session
-  // Only return active teachers (exclude deleted/inactive)
-  const filter = { 
-    schoolId,
-    status: 'active' // Only show active teachers
-  };
-  
-  if (classId) {
-    // Verify the class belongs to the school and active session
-    // SECURITY: Filter by schoolId to prevent cross-school access
-    const classObj = await Class.findOne({
-      _id: classId,
-      schoolId: schoolId // STRICT: Filter by schoolId
-    });
-    if (!classObj) {
-      throw new Error('Class does not belong to your school');
-    }
-    
-    if (classObj.sessionId.toString() !== activeSession._id.toString()) {
-      throw new Error('Class does not belong to the active session');
-    }
-    
-    filter.classId = classId;
-  } else {
-    // Find all classes for the school and active session
-    // Only return active classes (exclude deleted/inactive)
-    const classIds = await Class.find({ 
-      schoolId: schoolId,
-      sessionId: activeSession._id,
-      status: 'active' // Only show active classes
-    }).select('_id');
-    const classIdList = classIds.map(c => c._id);
-    
-    if (classIdList.length > 0) {
-      // Only show teachers assigned to classes in the active session
-      filter.classId = { $in: classIdList };
-    } else {
-      // No classes in active session, return empty result
-      filter.classId = { $in: [] };
-    }
-  }
+  // Build filter - only by schoolId
+  const filter = { schoolId };
 
   const teachers = await Teacher.find(filter)
     .populate('classId', 'className frozen sessionId')

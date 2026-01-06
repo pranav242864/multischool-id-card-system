@@ -10,6 +10,7 @@ const { createTeacher: createTeacherService } = require('../services/teacher.ser
 const { checkClassNotFrozen } = require('../services/class.service');
 const asyncHandler = require('../utils/asyncHandler');
 const bcrypt = require('bcryptjs');
+const mongoose = require('mongoose');
 
 // Configure multer for file uploads (memory storage)
 const storage = multer.memoryStorage();
@@ -134,6 +135,31 @@ exports.importExcelData = [
       });
     }
 
+    // Resolve schoolId based on user role
+    let schoolId;
+    if (user.role === 'SUPERADMIN' || user.role === 'Superadmin') {
+      // SUPERADMIN must provide schoolId in query parameter
+      if (!req.query || !req.query.schoolId) {
+        return res.status(400).json({
+          success: false,
+          message: 'School ID is required'
+        });
+      }
+      
+      // Validate schoolId as Mongo ObjectId
+      if (!mongoose.Types.ObjectId.isValid(req.query.schoolId)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid school ID format'
+        });
+      }
+      
+      schoolId = req.query.schoolId;
+    } else {
+      // Non-SUPERADMIN: use schoolId from user
+      schoolId = user.schoolId;
+    }
+
     try {
       // Parse Excel file
       const { headers, data } = await parseExcelFile(req.file.buffer);
@@ -158,7 +184,7 @@ exports.importExcelData = [
         const rowNumber = i + 2; // +2 because row 1 is header, and arrays are 0-indexed
 
         try {
-          const mappedData = mapRowToModel(rowData, headers, entityType, user.schoolId);
+          const mappedData = mapRowToModel(rowData, headers, entityType, schoolId);
 
           if (entityType === 'student') {
             // Import student
@@ -169,7 +195,7 @@ exports.importExcelData = [
             }
             
             // Get the active session for the school
-            const activeSession = await getActiveSession(user.schoolId || mappedData.schoolId);
+            const activeSession = await getActiveSession(schoolId || mappedData.schoolId);
             
             // Verify the class belongs to the active session and is not frozen
             const classObj = await Class.findById(mappedData.classId);
@@ -192,9 +218,9 @@ exports.importExcelData = [
             results.success++;
           } else if (entityType === 'teacher') {
             // Import teacher
-            // Ensure schoolId is set from user's school
-            if (!mappedData.schoolId && user.schoolId) {
-              mappedData.schoolId = user.schoolId;
+            // Ensure schoolId is set from resolved schoolId
+            if (!mappedData.schoolId && schoolId) {
+              mappedData.schoolId = schoolId;
             }
             if (!mappedData.schoolId) {
               throw new Error('School ID is required');
@@ -232,8 +258,8 @@ exports.importExcelData = [
             }
             
             // Ensure schoolId is set
-            if (!mappedData.schoolId && user.schoolId) {
-              mappedData.schoolId = user.schoolId;
+            if (!mappedData.schoolId && schoolId) {
+              mappedData.schoolId = schoolId;
             }
 
             const admin = await User.create(mappedData);

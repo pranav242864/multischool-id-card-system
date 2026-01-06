@@ -11,8 +11,8 @@ const { isTeacher } = require('../utils/roleGuards');
 
 // Create a new teacher
 const createTeacher = asyncHandler(async (req, res, next) => {
-  const { name, mobile, email, photoUrl, classId } = req.body;
-  const userId = req.user.id;
+  const { name, mobile, email, photoUrl, classId, userId } = req.body;
+  const authenticatedUserId = req.user.id;
 
   // SECURITY: Reject any attempt to set schoolId in request body
   // schoolId must come from req.user only (enforced by middleware, but double-check here)
@@ -28,6 +28,28 @@ const createTeacher = asyncHandler(async (req, res, next) => {
     return res.status(400).json({
       success: false,
       message: 'Name, mobile, and email are required'
+    });
+  }
+
+  // Validate userId (required to link Teacher to existing User)
+  if (!userId) {
+    console.error('Teacher creation failed: missing userId in request body', {
+      email,
+      name
+    });
+    return res.status(400).json({
+      success: false,
+      message: 'userId is required to create a teacher'
+    });
+  }
+
+  if (!mongoose.Types.ObjectId.isValid(userId)) {
+    console.error('Teacher creation failed: invalid userId format', {
+      userId
+    });
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid userId format'
     });
   }
 
@@ -59,7 +81,8 @@ const createTeacher = asyncHandler(async (req, res, next) => {
       email,
       photoUrl,
       classId: classId || null, // Allow null classId
-      schoolId
+      schoolId,
+      userId
     };
 
     const newTeacher = await createTeacherService(teacherData);
@@ -70,6 +93,11 @@ const createTeacher = asyncHandler(async (req, res, next) => {
       data: newTeacher
     });
   } catch (error) {
+    console.error('Teacher creation error:', {
+      message: error.message,
+      name: error.name,
+      code: error.code
+    });
     // Handle specific service errors
     if (error.message.includes('Class not found')) {
       return res.status(404).json({
@@ -153,19 +181,24 @@ const getTeachers = asyncHandler(async (req, res, next) => {
     });
   }
 
-  // Get schoolId from req.user context (standardized)
-  // Superadmin can use query parameter for filtering, others use req.user.schoolId
-  let schoolId;
-  try {
-    schoolId = getSchoolIdForFilter(req);
-  } catch (error) {
+  // Use schoolId from schoolScoping middleware
+  const schoolId = req.schoolId;
+
+  if (!schoolId) {
     return res.status(400).json({
       success: false,
-      message: error.message
+      message: 'School ID is required for this operation'
     });
   }
 
   try {
+    const filterObject = { schoolId: req.schoolId };
+
+    console.log({
+      role: req.user.role,
+      finalFilter: filterObject
+    });
+
     // Service layer handles ownership validation for teachers
     // For Teacher role, service will only return their own profile
     const result = await getTeachersService(schoolId, classId, parseInt(page), parseInt(limit), req.user.role, req.user.email);
