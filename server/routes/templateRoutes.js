@@ -5,12 +5,15 @@ const {
   getTemplate,
   getActiveTemplate,
   downloadExcelTemplate,
-  downloadExcelTemplateByType
+  downloadExcelTemplateByType,
+  updateTemplate,
+  deleteTemplate
 } = require('../controllers/templateController');
 const authMiddleware = require('../middleware/authMiddleware');
 const requireRole = require('../middleware/requireRole');
 const schoolScoping = require('../middleware/schoolScoping');
 const activeSessionMiddleware = require('../middleware/activeSessionMiddleware');
+const { resolveTemplate } = require('../services/templateAssignment.service');
 
 const router = express.Router();
 
@@ -40,8 +43,34 @@ router.get('/download-excel/:type', downloadExcelTemplateByType);
 // @desc    Download Excel template from specific template ID
 router.get('/:id/download-excel', downloadExcelTemplate);
 
+// @route   PATCH /api/v1/templates/:id
+// @desc    Update template
+router.patch('/:id', updateTemplate);
+
+// @route   DELETE /api/v1/templates/:id
+// @desc    Delete template
+router.delete('/:id', deleteTemplate);
+
 // @route   GET /api/v1/templates/:id
 // @desc    Get template by ID (must be last to avoid conflicts)
 router.get('/:id', getTemplate);
+
+router.post('/resolve/test', async (req, res, next) => {
+  try {
+    const template = await resolveTemplate({
+      schoolId: req.schoolId,
+      sessionId: req.body.sessionId || null,
+      classId: req.body.classId || null,
+      type: req.body.type
+    });
+
+    res.json({
+      success: true,
+      data: template
+    });
+  } catch (error) {
+    next(error);
+  }
+});
 
 module.exports = router;

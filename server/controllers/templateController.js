@@ -11,13 +11,20 @@ const { isSuperadmin } = require('../utils/roleGuards');
 // @route   POST /api/v1/templates
 // @access  Private - SUPERADMIN, SCHOOLADMIN
 exports.createTemplate = asyncHandler(async (req, res) => {
-  const { type, layoutConfig, dataTags, version, active } = req.body;
+  const { name, type, layoutConfig, dataTags, version, isActive, sessionId: bodySessionId, classId: bodyClassId } = req.body;
 
   // Validate required fields
   if (!type) {
     return res.status(400).json({
       success: false,
       message: 'Template type is required'
+    });
+  }
+
+  if (!name) {
+    return res.status(400).json({
+      success: false,
+      message: 'Template name is required'
     });
   }
 
@@ -57,7 +64,6 @@ exports.createTemplate = asyncHandler(async (req, res) => {
   let schoolId;
   try {
     schoolId = getSchoolIdForOperation(req);
-    // Convert to ObjectId if it's a string
     if (typeof schoolId === 'string') {
       schoolId = new mongoose.Types.ObjectId(schoolId);
     }
@@ -68,42 +74,47 @@ exports.createTemplate = asyncHandler(async (req, res) => {
     });
   }
 
-  // Get active session
-  if (!req.activeSession) {
-    return res.status(400).json({
-      success: false,
-      message: 'Active session is required to create templates'
-    });
+  let sessionId;
+  if (bodySessionId) {
+    sessionId = bodySessionId;
+  } else {
+    if (!req.activeSession) {
+      return res.status(400).json({
+        success: false,
+        message: 'Active session is required to create templates'
+      });
+    }
+    sessionId = req.activeSession._id;
   }
 
-  const sessionId = req.activeSession._id;
+  let classId = bodyClassId || null;
 
   // Determine version number
   let templateVersion = version;
   if (!templateVersion) {
-    // Get the latest version for this school, session, and type
     const latestTemplate = await Template.findOne({
       schoolId,
       sessionId,
-      type
+      type,
+      classId: classId
     }).sort({ version: -1 });
 
     templateVersion = latestTemplate ? latestTemplate.version + 1 : 1;
   }
 
-  // Create template data
   const templateData = {
     schoolId,
     sessionId,
     type,
+    name,
+    classId,
     version: templateVersion,
     layoutConfig,
     dataTags,
-    active: active !== undefined ? active : true // Default to active
+    isActive: isActive !== undefined ? isActive : true
   };
 
   try {
-    // Create template (service handles deactivating old active templates)
     const newTemplate = await createTemplate(templateData);
 
     res.status(201).json({
@@ -112,7 +123,6 @@ exports.createTemplate = asyncHandler(async (req, res) => {
       data: newTemplate.toObject ? newTemplate.toObject() : newTemplate
     });
   } catch (error) {
-    // Handle duplicate version error
     if (error.code === 11000 || error.codeName === 'DuplicateKey') {
       return res.status(409).json({
         success: false,
@@ -130,7 +140,6 @@ exports.createTemplate = asyncHandler(async (req, res) => {
 exports.getTemplates = asyncHandler(async (req, res) => {
   const { type } = req.query;
 
-  // Get schoolId from req.user context
   let schoolId;
   try {
     schoolId = getSchoolIdForOperation(req);
@@ -141,7 +150,6 @@ exports.getTemplates = asyncHandler(async (req, res) => {
     });
   }
 
-  // Get active session
   if (!req.activeSession) {
     return res.status(400).json({
       success: false,
@@ -151,7 +159,6 @@ exports.getTemplates = asyncHandler(async (req, res) => {
 
   const sessionId = req.activeSession._id;
 
-  // Validate template type if provided
   if (type) {
     const validTypes = ['STUDENT', 'TEACHER', 'SCHOOLADMIN'];
     if (!validTypes.includes(type)) {
@@ -162,7 +169,6 @@ exports.getTemplates = asyncHandler(async (req, res) => {
     }
   }
 
-  // Get templates
   const templates = await getTemplatesService(schoolId, sessionId, type || null);
 
   res.status(200).json({
@@ -187,7 +193,6 @@ exports.getTemplate = asyncHandler(async (req, res) => {
     });
   }
 
-  // Verify template belongs to user's school (unless SUPERADMIN)
   if (!isSuperadmin(req.user)) {
     const schoolId = req.user.schoolId;
     if (!schoolId || template.schoolId._id.toString() !== schoolId.toString()) {
@@ -197,6 +202,75 @@ exports.getTemplate = asyncHandler(async (req, res) => {
       });
     }
   }
+
+  res.status(200).json({
+    success: true,
+    data: template
+  });
+});
+
+// @desc    Update template
+// @route   PATCH /api/v1/templates/:id
+// @access  Private - SUPERADMIN, SCHOOLADMIN
+exports.updateTemplate = asyncHandler(async (req, res) => {
+  const { name, layoutConfig, isActive, sessionId, classId } = req.body;
+
+  const template = await Template.findById(req.params.id);
+
+  if (!template) {
+    return res.status(404).json({
+      success: false,
+      message: 'Template not found'
+    });
+  }
+
+  if (!isSuperadmin(req.user)) {
+    const schoolId = req.user.schoolId;
+    if (!schoolId || template.schoolId.toString() !== schoolId.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: 'Template does not belong to your school'
+      });
+    }
+  }
+
+  if (name !== undefined) {
+    template.name = name;
+  }
+
+  if (layoutConfig !== undefined) {
+    template.layoutConfig = layoutConfig;
+  }
+
+  if (sessionId !== undefined) {
+    template.sessionId = sessionId;
+  }
+
+  if (classId !== undefined) {
+    template.classId = classId;
+  }
+
+  if (isActive !== undefined) {
+    template.isActive = isActive;
+  }
+
+  if (template.isActive === true) {
+    await Template.updateMany(
+      {
+        _id: { $ne: template._id },
+        schoolId: template.schoolId,
+        sessionId: template.sessionId,
+        classId: template.classId,
+        type: template.type,
+        isActive: true
+      },
+      {
+        $set: { isActive: false }
+      }
+    );
+  }
+
+  await template.save();
 
   res.status(200).json({
     success: true,
@@ -368,4 +442,31 @@ exports.downloadExcelTemplateByType = asyncHandler(async (req, res) => {
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
   res.send(excelBuffer);
+});
+
+// @desc    Delete template
+// @route   DELETE /api/v1/templates/:id
+// @access  Private - SUPERADMIN, SCHOOLADMIN
+exports.deleteTemplate = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  const schoolId = req.schoolId;
+
+  const template = await Template.findOne({
+    _id: id,
+    schoolId: schoolId
+  });
+
+  if (!template) {
+    return res.status(404).json({
+      success: false,
+      message: 'Template not found'
+    });
+  }
+
+  await Template.deleteOne({ _id: template._id, schoolId: schoolId });
+
+  res.status(200).json({
+    success: true
+  });
 });

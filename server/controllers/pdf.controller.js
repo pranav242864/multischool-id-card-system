@@ -3,6 +3,8 @@ const { resolveTemplate } = require('../services/templateAssignment.service');
 const { generateCardData } = require('../services/card.service');
 const { generatePdf } = require('../services/pdf.service');
 const { getActiveSession } = require('../utils/sessionUtils');
+const { getSchoolIdForOperation } = require('../utils/getSchoolId');
+const archiver = require('archiver');
 const asyncHandler = require('../utils/asyncHandler');
 
 const generateStudentPDF = asyncHandler(async (req, res) => {
@@ -55,7 +57,107 @@ const generateStudentPDF = asyncHandler(async (req, res) => {
   res.send(pdfBuffer);
 });
 
+const generateBulkStudentPDF = asyncHandler(async (req, res) => {
+  const schoolId = getSchoolIdForOperation(req);
+  const activeSession = await getActiveSession(schoolId);
+
+  let students;
+  if (req.body.studentIds && Array.isArray(req.body.studentIds) && req.body.studentIds.length > 0) {
+    students = await Student.find({
+      _id: { $in: req.body.studentIds },
+      schoolId: schoolId,
+      sessionId: activeSession._id
+    })
+      .populate('classId', 'className')
+      .populate('sessionId', 'sessionName')
+      .populate('schoolId', 'name');
+  } else {
+    students = await Student.find({
+      schoolId: schoolId,
+      sessionId: activeSession._id
+    })
+      .populate('classId', 'className')
+      .populate('sessionId', 'sessionName')
+      .populate('schoolId', 'name');
+  }
+
+  if (!students || students.length === 0) {
+    return res.status(404).json({
+      success: false,
+      message: 'No students found'
+    });
+  }
+
+  const pdfBuffers = [];
+
+  for (const student of students) {
+    try {
+      const template = await resolveTemplate({
+        schoolId,
+        sessionId: student.sessionId ? student.sessionId._id : null,
+        classId: student.classId ? student.classId._id : null,
+        type: 'STUDENT'
+      });
+
+      const cardData = generateCardData(student, template, 'STUDENT');
+
+      const pdfBuffer = await generatePdf({
+        layoutConfig: cardData.layoutConfig,
+        data: cardData.data
+      });
+
+      pdfBuffers.push({
+        buffer: pdfBuffer,
+        studentId: student._id.toString(),
+        studentName: student.name,
+        admissionNo: student.admissionNo
+      });
+    } catch (error) {
+      console.warn(`[PDF] Skipped student ${student._id}:`, error.message);
+    }
+  }
+
+  if (pdfBuffers.length === 0) {
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to generate PDFs for any students'
+    });
+  }
+
+  const archive = archiver('zip', {
+    zlib: { level: 9 }
+  });
+
+  const zipChunks = [];
+  archive.on('data', (chunk) => {
+    zipChunks.push(chunk);
+  });
+
+  await new Promise((resolve, reject) => {
+    archive.on('end', resolve);
+    archive.on('error', reject);
+
+    pdfBuffers.forEach(({ buffer, studentName, admissionNo }) => {
+      const safeName = (studentName || 'Student').replace(/[^a-zA-Z0-9]/g, '_');
+      const filename = admissionNo
+        ? `${admissionNo}_${safeName}.pdf`
+        : `${safeName}.pdf`;
+
+      archive.append(buffer, { name: filename });
+    });
+
+    archive.finalize();
+  });
+
+  const zipBuffer = Buffer.concat(zipChunks);
+
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', 'attachment; filename="students-id-cards.zip"');
+  res.send(zipBuffer);
+});
+
 module.exports = {
-  generateStudentPDF
+  generateStudentPDF,
+  generateBulkStudentPDF
 };
 

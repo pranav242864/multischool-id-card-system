@@ -236,7 +236,7 @@ exports.importExcelData = [
             if (!mappedData.schoolId) {
               throw new Error('School ID is required');
             }
-
+            
             const existingUser = await User.findOne({ 
               email: mappedData.email.toLowerCase(),
               schoolId: mappedData.schoolId
@@ -292,7 +292,7 @@ exports.importExcelData = [
             }
 
             const activeSession = await getActiveSession(mappedData.schoolId);
-
+            
             if (mappedData.classId) {
               const classObj = await Class.findById(mappedData.classId);
               if (!classObj) {
@@ -304,7 +304,7 @@ exports.importExcelData = [
                 throw new Error('Class does not belong to the active session');
               }
             }
-
+            
             const teacher = await createTeacherService(teacherData);
             results.success++;
           } else if (entityType === 'admin') {

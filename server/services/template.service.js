@@ -14,7 +14,7 @@ async function getActiveTemplate(schoolId, sessionId, type) {
     schoolId,
     sessionId,
     type,
-    active: true
+    isActive: true
   });
 
   return template;
@@ -28,27 +28,25 @@ async function getActiveTemplate(schoolId, sessionId, type) {
  */
 async function createTemplate(templateData) {
   try {
-    // If creating with active=true, deactivate other active templates first
-    if (templateData.active !== false) {
+    if (templateData.isActive !== false) {
       await Template.updateMany(
         {
           schoolId: templateData.schoolId,
           sessionId: templateData.sessionId,
+          classId: templateData.classId || null,
           type: templateData.type,
-          active: true
+          isActive: true
         },
         {
-          $set: { active: false }
+          $set: { isActive: false }
         }
       );
     }
 
-    // Set active flag (default to true if not specified)
-    if (templateData.active === undefined) {
-      templateData.active = true;
+    if (templateData.isActive === undefined) {
+      templateData.isActive = true;
     }
 
-    // Create the new template
     const createdTemplate = new Template(templateData);
     await createdTemplate.save();
     
@@ -62,7 +60,7 @@ async function createTemplate(templateData) {
         schoolId: templateData.schoolId,
         sessionId: templateData.sessionId,
         type: templateData.type,
-        active: templateData.active
+        isActive: templateData.isActive
       }
     });
     throw error;

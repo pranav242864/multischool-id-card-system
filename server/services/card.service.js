@@ -21,18 +21,32 @@ function generateCardData(entity, template, entityType) {
   }
 
   // Validate school match
-  const entitySchoolId = entity.schoolId ? entity.schoolId.toString() : entity.schoolId._id.toString();
-  const templateSchoolId = template.schoolId ? template.schoolId.toString() : template.schoolId._id.toString();
-  
+  const entitySchoolId =
+    typeof entity.schoolId === 'object'
+      ? String(entity.schoolId._id || entity.schoolId)
+      : String(entity.schoolId);
+
+  const templateSchoolId =
+    typeof template.schoolId === 'object'
+      ? String(template.schoolId._id || template.schoolId)
+      : String(template.schoolId);
+
   if (entitySchoolId !== templateSchoolId) {
     throw new Error('Entity school does not match template school');
   }
 
   // Validate session match (for students)
   if (entityType === 'STUDENT') {
-    const entitySessionId = entity.sessionId ? entity.sessionId.toString() : entity.sessionId._id.toString();
-    const templateSessionId = template.sessionId ? template.sessionId.toString() : template.sessionId._id.toString();
-    
+    const entitySessionId =
+      typeof entity.sessionId === 'object'
+        ? String(entity.sessionId._id || entity.sessionId)
+        : String(entity.sessionId);
+
+    const templateSessionId =
+      typeof template.sessionId === 'object'
+        ? String(template.sessionId._id || template.sessionId)
+        : String(template.sessionId);
+
     if (entitySessionId !== templateSessionId) {
       throw new Error('Student session does not match template session');
     }

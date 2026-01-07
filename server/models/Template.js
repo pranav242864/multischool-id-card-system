@@ -19,6 +19,16 @@ const templateSchema = new mongoose.Schema({
       message: 'Type must be either STUDENT, TEACHER, or SCHOOLADMIN'
     }
   },
+  name: {
+    type: String,
+    required: [true, 'Template name is required'],
+    trim: true
+  },
+  classId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Class',
+    default: null
+  },
   version: {
     type: Number,
     required: [true, 'Version is required'],
@@ -31,10 +41,9 @@ const templateSchema = new mongoose.Schema({
   dataTags: [{
     type: String
   }],
-  active: {
+  isActive: {
     type: Boolean,
-    default: false,
-    comment: 'Only one active template per (schoolId + sessionId + type). Older versions are read-only.'
+    default: true
   }
 }, {
   timestamps: true
@@ -43,13 +52,13 @@ const templateSchema = new mongoose.Schema({
 // Unique compound index to prevent cross-session collisions
 templateSchema.index({ schoolId: 1, sessionId: 1, type: 1, version: 1 }, { unique: true });
 
-// Partial unique index to enforce only one active template per (schoolId + sessionId + type)
+// Partial unique index to enforce only one active template per (schoolId + sessionId + classId + type) where isActive=true
 templateSchema.index(
-  { schoolId: 1, sessionId: 1, type: 1 },
+  { schoolId: 1, sessionId: 1, classId: 1, type: 1 },
   {
     unique: true,
-    partialFilterExpression: { active: true },
-    name: 'unique_active_template_per_school_session_type'
+    partialFilterExpression: { isActive: true },
+    name: 'unique_active_template_per_school_session_class_type'
   }
 );
 
