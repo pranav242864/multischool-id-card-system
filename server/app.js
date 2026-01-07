@@ -1,4 +1,5 @@
 const express = require('express');
+const path = require('path');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
@@ -11,6 +12,7 @@ const healthRoutes = require('./routes/healthRoutes');
 const authRoutes = require('./routes/authRoutes');
 const templateRoutes = require('./routes/templateRoutes');
 const bulkImportRoutes = require('./routes/bulkImportRoutes');
+const bulkUploadRoutes = require('./routes/bulkUploadRoutes');
 const sessionRoutes = require('./routes/sessionRoutes');
 const classRoutes = require('./routes/classRoutes');
 const studentRoutes = require('./routes/studentRoutes');
@@ -51,6 +53,9 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Serve uploaded images statically
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 // Routes
 // NOTE: Auth routes are mounted WITHOUT middleware - login must be public
 app.use('/health', healthRoutes);
@@ -60,6 +65,7 @@ app.use('/api/auth', authRoutes); // Public routes: /login, /google, /forgot-pas
 app.use('/api/v1/auth', authRoutes); // Same routes, versioned
 app.use('/api/v1/templates', templateRoutes); // Protected (has authMiddleware in route file)
 app.use('/api/v1/bulk-import', bulkImportRoutes); // Protected (has authMiddleware in route file)
+app.use('/api/v1/bulk-upload', bulkUploadRoutes); // Protected (has authMiddleware in route file)
 app.use('/api/v1/classes', classRoutes); // Protected (has authMiddleware in route file)
 app.use('/api/v1/sessions', sessionRoutes); // Protected (has authMiddleware in route file)
 app.use('/api/v1/students', studentRoutes); // Protected (has authMiddleware in route file)
