@@ -9,6 +9,7 @@ const { createStudent: createStudentService } = require('../services/student.ser
 const { createTeacher: createTeacherService } = require('../services/teacher.service');
 const { checkClassNotFrozen } = require('../services/class.service');
 const asyncHandler = require('../utils/asyncHandler');
+const { logAudit } = require('../utils/audit.helper');
 const bcrypt = require('bcryptjs');
 const mongoose = require('mongoose');
 
@@ -338,6 +339,17 @@ exports.importExcelData = [
           });
         }
       }
+
+      // Audit log: bulk import
+      const action = entityType === 'student' ? 'BULK_IMPORT_STUDENTS' : 'BULK_IMPORT_TEACHERS';
+      const entityTypeUpper = entityType.toUpperCase();
+      await logAudit({
+        action,
+        entityType: entityTypeUpper,
+        entityId: null,
+        req,
+        metadata: { successCount: results.success, failedCount: results.failed }
+      });
 
       res.status(200).json({
         success: true,

@@ -6,6 +6,7 @@ const { getActiveSession } = require('../utils/sessionUtils');
 const { getSchoolIdForOperation } = require('../utils/getSchoolId');
 const archiver = require('archiver');
 const asyncHandler = require('../utils/asyncHandler');
+const { logAudit } = require('../utils/audit.helper');
 
 const generateStudentPDF = asyncHandler(async (req, res) => {
   console.log('[PDF] studentId:', req.params.studentId);
@@ -50,6 +51,15 @@ const generateStudentPDF = asyncHandler(async (req, res) => {
   const pdfBuffer = await generatePdf({
     layoutConfig: cardData.layoutConfig,
     data: cardData.data
+  });
+
+  // Audit log: PDF generated
+  await logAudit({
+    action: 'GENERATE_PDF',
+    entityType: 'STUDENT',
+    entityId: studentId,
+    req,
+    metadata: { count: 1 }
   });
 
   res.setHeader('Content-Type', 'application/pdf');
@@ -150,6 +160,15 @@ const generateBulkStudentPDF = asyncHandler(async (req, res) => {
   });
 
   const zipBuffer = Buffer.concat(zipChunks);
+
+  // Audit log: bulk PDF generated
+  await logAudit({
+    action: 'BULK_GENERATE_PDF',
+    entityType: 'STUDENT',
+    entityId: null,
+    req,
+    metadata: { count: pdfBuffers.length }
+  });
 
   res.setHeader('Content-Type', 'application/zip');
   res.setHeader('Content-Disposition', 'attachment; filename="students-id-cards.zip"');

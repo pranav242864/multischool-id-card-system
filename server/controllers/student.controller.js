@@ -8,6 +8,7 @@ const {
 const asyncHandler = require('../utils/asyncHandler');
 const { getSchoolIdForOperation, getSchoolIdForFilter } = require('../utils/getSchoolId');
 const { isSuperadmin, isTeacher } = require('../utils/roleGuards');
+const { logAudit } = require('../utils/audit.helper');
 const User = require('../models/User');
 const Teacher = require('../models/Teacher');
 
@@ -153,6 +154,15 @@ const createStudent = asyncHandler(async (req, res, next) => {
     };
 
     const newStudent = await createStudentService(studentData);
+
+    // Audit log: student created
+    await logAudit({
+      action: 'CREATE_STUDENT',
+      entityType: 'STUDENT',
+      entityId: newStudent._id,
+      req,
+      metadata: {}
+    });
 
     res.status(201).json({
       success: true,
@@ -468,6 +478,15 @@ const updateStudent = asyncHandler(async (req, res, next) => {
 
     const updatedStudent = await updateStudentService(studentId, updateData, schoolId, req.user.role);
 
+    // Audit log: student updated
+    await logAudit({
+      action: 'UPDATE_STUDENT',
+      entityType: 'STUDENT',
+      entityId: studentId,
+      req,
+      metadata: {}
+    });
+
     res.status(200).json({
       success: true,
       message: 'Student updated successfully',
@@ -557,6 +576,15 @@ const deleteStudent = asyncHandler(async (req, res, next) => {
   try {
     const result = await deleteStudentService(studentId, schoolId);
 
+    // Audit log: student deleted
+    await logAudit({
+      action: 'DELETE_STUDENT',
+      entityType: 'STUDENT',
+      entityId: studentId,
+      req,
+      metadata: {}
+    });
+
     res.status(200).json({
       success: true,
       message: result.message
@@ -644,6 +672,15 @@ const bulkDeleteStudents = asyncHandler(async (req, res, next) => {
       });
     }
   }
+
+  // Audit log: bulk delete students
+  await logAudit({
+    action: 'BULK_DELETE_STUDENTS',
+    entityType: 'STUDENT',
+    entityId: null,
+    req,
+    metadata: { count: ids.length }
+  });
 
   // Return response matching bulk import format
   res.status(200).json({

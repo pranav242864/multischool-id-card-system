@@ -6,6 +6,7 @@ const Teacher = require('../models/Teacher');
 const User = require('../models/User');
 const { getActiveSession } = require('../utils/sessionUtils');
 const asyncHandler = require('../utils/asyncHandler');
+const { logAudit } = require('../utils/audit.helper');
 const mongoose = require('mongoose');
 
 // Ensure upload directories exist
@@ -248,6 +249,15 @@ const bulkUploadImages = [
         }
       }
       
+      // Audit log: bulk image upload
+      await logAudit({
+        action: 'BULK_IMAGE_UPLOAD',
+        entityType: entityType.toUpperCase(),
+        entityId: null,
+        req,
+        metadata: { successCount: results.success, failedCount: results.failed }
+      });
+
       res.status(200).json({
         success: true,
         message: `Upload completed: ${results.success} successful, ${results.failed} failed`,

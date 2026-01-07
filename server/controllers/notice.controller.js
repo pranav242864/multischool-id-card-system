@@ -2,6 +2,7 @@ const Notice = require('../models/Notice');
 const { getSchoolIdForOperation } = require('../utils/getSchoolId');
 const { isSuperadmin } = require('../utils/roleGuards');
 const asyncHandler = require('../utils/asyncHandler');
+const { logAudit } = require('../utils/audit.helper');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -103,6 +104,15 @@ const createNotice = asyncHandler(async (req, res) => {
     sessionId: sessionId || null,
     createdBy: req.user.id,
     status: 'ACTIVE'
+  });
+
+  // Audit log: notice created
+  await logAudit({
+    action: 'CREATE_NOTICE',
+    entityType: 'NOTICE',
+    entityId: notice._id,
+    req,
+    metadata: {}
   });
 
   res.status(201).json({
@@ -226,6 +236,15 @@ const updateNotice = asyncHandler(async (req, res) => {
 
   await notice.save();
 
+  // Audit log: notice updated
+  await logAudit({
+    action: 'UPDATE_NOTICE',
+    entityType: 'NOTICE',
+    entityId: id,
+    req,
+    metadata: {}
+  });
+
   res.status(200).json({
     success: true,
     message: 'Notice updated successfully',
@@ -251,6 +270,15 @@ const archiveNotice = asyncHandler(async (req, res) => {
 
   notice.status = 'ARCHIVED';
   await notice.save();
+
+  // Audit log: notice deleted (archived)
+  await logAudit({
+    action: 'DELETE_NOTICE',
+    entityType: 'NOTICE',
+    entityId: id,
+    req,
+    metadata: {}
+  });
 
   res.status(200).json({
     success: true,

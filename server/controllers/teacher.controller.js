@@ -8,6 +8,7 @@ const {
 const asyncHandler = require('../utils/asyncHandler');
 const { getSchoolIdForOperation, getSchoolIdForFilter } = require('../utils/getSchoolId');
 const { isTeacher } = require('../utils/roleGuards');
+const { logAudit } = require('../utils/audit.helper');
 
 // Create a new teacher
 const createTeacher = asyncHandler(async (req, res, next) => {
@@ -86,6 +87,15 @@ const createTeacher = asyncHandler(async (req, res, next) => {
     };
 
     const newTeacher = await createTeacherService(teacherData);
+
+    // Audit log: teacher created
+    await logAudit({
+      action: 'CREATE_TEACHER',
+      entityType: 'TEACHER',
+      entityId: newTeacher._id,
+      req,
+      metadata: {}
+    });
 
     res.status(201).json({
       success: true,
@@ -284,6 +294,15 @@ const updateTeacher = asyncHandler(async (req, res, next) => {
   try {
     const updatedTeacher = await updateTeacherService(teacherId, updateData, schoolId, req.user.role, req.user.email);
 
+    // Audit log: teacher updated
+    await logAudit({
+      action: 'UPDATE_TEACHER',
+      entityType: 'TEACHER',
+      entityId: teacherId,
+      req,
+      metadata: {}
+    });
+
     res.status(200).json({
       success: true,
       message: 'Teacher updated successfully',
@@ -407,6 +426,15 @@ const deleteTeacher = asyncHandler(async (req, res, next) => {
   try {
     const result = await deleteTeacherService(teacherId, schoolId);
 
+    // Audit log: teacher deleted
+    await logAudit({
+      action: 'DELETE_TEACHER',
+      entityType: 'TEACHER',
+      entityId: teacherId,
+      req,
+      metadata: {}
+    });
+
     res.status(200).json({
       success: true,
       message: result.message
@@ -500,6 +528,15 @@ const bulkDeleteTeachers = asyncHandler(async (req, res, next) => {
       });
     }
   }
+
+  // Audit log: bulk delete teachers
+  await logAudit({
+    action: 'BULK_DELETE_TEACHERS',
+    entityType: 'TEACHER',
+    entityId: null,
+    req,
+    metadata: { count: ids.length }
+  });
 
   // Return response matching bulk import format
   res.status(200).json({

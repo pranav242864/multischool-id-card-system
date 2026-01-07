@@ -6,6 +6,7 @@ const { createTemplate, getActiveTemplate: getActiveTemplateService, getTemplate
 const { getSchoolIdForOperation } = require('../utils/getSchoolId');
 const asyncHandler = require('../utils/asyncHandler');
 const { isSuperadmin } = require('../utils/roleGuards');
+const { logAudit } = require('../utils/audit.helper');
 
 // @desc    Create a new template
 // @route   POST /api/v1/templates
@@ -116,6 +117,15 @@ exports.createTemplate = asyncHandler(async (req, res) => {
 
   try {
     const newTemplate = await createTemplate(templateData);
+
+    // Audit log: template created
+    await logAudit({
+      action: 'CREATE_TEMPLATE',
+      entityType: 'TEMPLATE',
+      entityId: newTemplate._id,
+      req,
+      metadata: {}
+    });
 
     res.status(201).json({
       success: true,
@@ -271,6 +281,15 @@ exports.updateTemplate = asyncHandler(async (req, res) => {
   }
 
   await template.save();
+
+  // Audit log: template updated
+  await logAudit({
+    action: 'UPDATE_TEMPLATE',
+    entityType: 'TEMPLATE',
+    entityId: id,
+    req,
+    metadata: {}
+  });
 
   res.status(200).json({
     success: true,
@@ -465,6 +484,15 @@ exports.deleteTemplate = asyncHandler(async (req, res) => {
   }
 
   await Template.deleteOne({ _id: template._id, schoolId: schoolId });
+
+  // Audit log: template deleted
+  await logAudit({
+    action: 'DELETE_TEMPLATE',
+    entityType: 'TEMPLATE',
+    entityId: id,
+    req,
+    metadata: {}
+  });
 
   res.status(200).json({
     success: true

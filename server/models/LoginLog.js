@@ -15,8 +15,8 @@ const loginLogSchema = new mongoose.Schema({
   role: {
     type: String,
     enum: {
-      values: ['Superadmin', 'Schooladmin', 'Teacher', null],
-      message: 'Role must be either Superadmin, Schooladmin, or Teacher'
+      values: ['SUPERADMIN', 'SCHOOLADMIN', 'TEACHER', null],
+      message: 'Role must be either SUPERADMIN, SCHOOLADMIN, or TEACHER'
     },
     default: null
   },

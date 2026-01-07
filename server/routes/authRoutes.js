@@ -458,6 +458,23 @@ router.post('/login', async (req, res) => {
       loginMethod: 'email_password'
     });
 
+    // Audit log: successful login
+    const { logAuditEvent } = require('../services/auditLog.service');
+    try {
+      await logAuditEvent({
+        action: 'LOGIN',
+        entityType: 'USER',
+        entityId: user._id,
+        schoolId: user.schoolId ? user.schoolId._id : null,
+        user: { id: user._id.toString(), role: user.role },
+        req,
+        status: 'SUCCESS',
+        metadata: { email: user.email }
+      });
+    } catch (error) {
+      // Fire-and-forget: never block login
+    }
+
     // Return user data without passwordHash
     res.status(200).json({
       success: true,
