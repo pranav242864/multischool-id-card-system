@@ -7,6 +7,7 @@ const AllowedLogin = require('../models/AllowedLogin');
 const PasswordResetToken = require('../models/PasswordResetToken');
 const LoginLog = require('../models/LoginLog');
 const authMiddleware = require('../middleware/authMiddleware');
+const requireRole = require('../middleware/requireRole');
 const { logLoginAttempt, getClientIp } = require('../utils/loginLogger');
 
 const router = express.Router();
@@ -978,7 +979,7 @@ router.post('/reset-password', async (req, res) => {
 // @desc    Get login logs (Superadmin only)
 // @route   GET /auth/login-logs
 // @access  Private (Superadmin only)
-router.get('/login-logs', authMiddleware, async (req, res) => {
+router.get('/login-logs', authMiddleware, requireRole('SUPERADMIN'), async (req, res) => {
   try {
     const { page = 1, limit = 50, schoolId, role, success, startDate, endDate } = req.query;
 
