@@ -1,45 +1,53 @@
 const mongoose = require('mongoose');
 
 const noticeSchema = new mongoose.Schema({
+  title: {
+    type: String,
+    required: [true, 'Title is required'],
+    trim: true
+  },
+  description: {
+    type: String,
+    required: [true, 'Description is required'],
+    trim: true
+  },
+  attachments: {
+    type: [String],
+    default: []
+  },
+  visibleTo: {
+    type: [String],
+    required: [true, 'Visible to is required'],
+    enum: {
+      values: ['SUPERADMIN', 'SCHOOLADMIN', 'TEACHER'],
+      message: 'Visible to must contain only SUPERADMIN, SCHOOLADMIN, or TEACHER'
+    }
+  },
   schoolId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'School',
-    required: [true, 'School is required']
+    required: [true, 'School is required'],
+    index: true
   },
-  content: {
-    type: String,
-    required: [true, 'Content is required'],
-    trim: true
+  sessionId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Session'
   },
-  noticeDate: {
-    type: Date,
-    required: [true, 'Notice date is required'],
-    default: Date.now
-  },
-  attachmentUrl: {
-    type: String,
-    match: [/^https?:\/\/.+\.(jpg|jpeg|png|gif|pdf|doc|docx)$/i, 'Please enter a valid file URL']
-  },
-  attachmentType: {
-    type: String,
-    enum: {
-      values: ['image', 'document', 'pdf'],
-      message: 'Attachment type must be image, document, or pdf'
-    }
+  createdBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: [true, 'Created by is required']
   },
   status: {
     type: String,
     enum: {
-      values: ['active', 'inactive', 'archived'],
-      message: 'Status must be either active, inactive, or archived'
+      values: ['ACTIVE', 'ARCHIVED'],
+      message: 'Status must be either ACTIVE or ARCHIVED'
     },
-    default: 'active'
+    default: 'ACTIVE'
   }
 }, {
   timestamps: true
 });
-
-// Index for efficient querying by school and status
-noticeSchema.index({ schoolId: 1, status: 1 });
 
 module.exports = mongoose.model('Notice', noticeSchema);

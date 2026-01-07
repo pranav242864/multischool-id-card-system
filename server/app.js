@@ -22,6 +22,7 @@ const schoolRoutes = require('./routes/schoolRoutes');
 const userTeacherRoutes = require('./routes/userTeacherRoutes');
 const previewRoutes = require('./routes/previewRoutes');
 const pdfRoutes = require('./routes/pdfRoutes');
+const noticeRoutes = require('./routes/noticeRoutes');
 
 // Connect to database
 // Note: This will throw and exit if connection fails (fail fast)
@@ -77,6 +78,7 @@ app.use('/api/v1', schoolRoutes); // Protected (has authMiddleware in route file
 app.use('/api/v1/users', userTeacherRoutes); // Protected (Superadmin-only teacher user creation)
 app.use('/api/v1/preview', previewRoutes);
 app.use('/api/v1/pdf', pdfRoutes);
+app.use('/api/v1/notices', noticeRoutes);
 
 console.log('[APP] Routes mounted');
 
