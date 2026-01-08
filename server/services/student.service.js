@@ -289,7 +289,10 @@ const deleteStudent = async (studentId, schoolId) => {
   }
 
   // Prevent deletion of students from inactive or archived sessions
-  if (student.sessionId.toString() !== activeSession._id.toString()) {
+  // When sessionId is populated, it's a Session document, so use ._id to get the ObjectId
+  const studentSessionId = student.sessionId._id ? student.sessionId._id.toString() : student.sessionId.toString();
+  
+  if (studentSessionId !== activeSession._id.toString()) {
     // Check if the student's session is archived
     if (student.sessionId && student.sessionId.archived) {
       throw new Error('Cannot delete student from an archived session. Archived sessions are read-only.');
@@ -301,7 +304,7 @@ const deleteStudent = async (studentId, schoolId) => {
   // Use centralized freeze check with schoolId for security
   await validateClassNotFrozen(student.classId, schoolId, 'delete');
 
-  // In this implementation, we'll delete the student
+  // Delete the student (hard delete)
   await Student.findByIdAndDelete(studentId);
 
   return { message: 'Student deleted successfully' };

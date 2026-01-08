@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { DataTable, Column } from '../ui/DataTable';
 import { Button } from '../ui/button';
-import { Plus, Edit, Trash2, UserCircle, School } from 'lucide-react';
+import { Plus, Edit, Trash2, UserCircle, School, AlertCircle } from 'lucide-react';
 import { Badge } from '../ui/badge';
-import { teacherAPI, APIError } from '../../utils/api';
+import { teacherAPI, classAPI, APIError, getUserRole } from '../../utils/api';
+import { AddTeacherModal } from '../modals/AddTeacherModal';
 
 interface Teacher {
   _id?: string;
@@ -13,47 +14,144 @@ interface Teacher {
   mobile: string;
   assignedClass?: string;
   classId?: any;
-  subject?: string;
-  status?: 'active' | 'inactive' | 'ACTIVE' | 'DISABLED';
+  userId?: any;
+  photoUrl?: string;
+  status?: 'ACTIVE' | 'DISABLED';
 }
 
 export function ManageTeachers() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingTeacher, setEditingTeacher] = useState<Teacher | null>(null);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
+  const [hasActiveSession, setHasActiveSession] = useState<boolean>(true);
+  const [deletingTeacherId, setDeletingTeacherId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [updating, setUpdating] = useState(false);
+  const [classes, setClasses] = useState<any[]>([]);
 
+  // Check user role for DELETE button visibility
+  const userRole = getUserRole();
+  const canDelete = userRole === 'SUPERADMIN' || userRole === 'superadmin';
+
+  // Fetch classes on mount to check active session
   useEffect(() => {
-    const fetchTeachers = async () => {
-      setLoading(true);
-      setError(null);
+    const fetchClasses = async () => {
       try {
-        const response = await teacherAPI.getTeachers();
+        const response = await classAPI.getClasses();
         if (response.success && response.data) {
-          // Map backend data to frontend format
-          const mappedTeachers = response.data.map((teacher: any) => ({
-            _id: teacher._id,
-            id: teacher._id,
-            name: teacher.name,
-            email: teacher.email || '',
-            mobile: teacher.mobile || '',
-            assignedClass: teacher.classId?.className || 'N/A',
-            classId: teacher.classId,
-            subject: 'N/A', // Not available in backend
-            status: (teacher.status || 'ACTIVE').toLowerCase() as 'active' | 'inactive',
-          }));
-          setTeachers(mappedTeachers);
+          setClasses(response.data);
+          setHasActiveSession(true);
         }
       } catch (err) {
         const apiError = err as APIError;
-        setError(apiError.message || 'Failed to load teachers');
-      } finally {
-        setLoading(false);
+        if (apiError.message?.includes('No active session found')) {
+          setHasActiveSession(false);
+          setClasses([]);
+        }
       }
     };
 
+    fetchClasses();
+  }, []);
+
+  // Fetch teachers on mount and after mutations
+  const fetchTeachers = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await teacherAPI.getTeachers();
+      if (response.success && response.data) {
+        const mappedTeachers = response.data.map((teacher: any) => ({
+          _id: teacher._id,
+          id: teacher._id,
+          name: teacher.name,
+          email: teacher.email || '',
+          mobile: teacher.mobile || '',
+          assignedClass: teacher.classId?.className || 'Not Assigned',
+          classId: teacher.classId,
+          userId: teacher.userId,
+          photoUrl: teacher.photoUrl || '',
+          status: teacher.status || 'ACTIVE',
+        }));
+        setTeachers(mappedTeachers);
+        setHasActiveSession(true);
+      }
+    } catch (err) {
+      const apiError = err as APIError;
+      if (apiError.message?.includes('No active session found')) {
+        setHasActiveSession(false);
+        setTeachers([]);
+        setError(apiError.message || 'No active session found for this school. Please activate a session first.');
+      } else {
+        setError(apiError.message || 'Failed to load teachers');
+        setHasActiveSession(false);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchTeachers();
   }, []);
+
+  const handleDelete = async (teacherId: string) => {
+    if (!canDelete) {
+      setError('Only Superadmin can delete teachers');
+      return;
+    }
+
+    if (!confirm('Are you sure you want to delete this teacher?')) {
+      return;
+    }
+
+    setDeletingTeacherId(teacherId);
+    setError(null);
+
+    try {
+      await teacherAPI.deleteTeacher(teacherId);
+      // Re-fetch teachers after delete
+      await fetchTeachers();
+    } catch (err) {
+      const apiError = err as APIError;
+      setError(apiError.message || 'Failed to delete teacher');
+    } finally {
+      setDeletingTeacherId(null);
+    }
+  };
+
+  const handleCreateTeacher = async () => {
+    setCreating(true);
+    setError(null);
+    try {
+      // Modal handles the creation, we just need to re-fetch
+      await fetchTeachers();
+    } catch (err) {
+      const apiError = err as APIError;
+      setError(apiError.message || 'Failed to refresh teachers');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleUpdateTeacher = async () => {
+    setUpdating(true);
+    setError(null);
+    try {
+      // Modal handles the update, we just need to re-fetch
+      await fetchTeachers();
+    } catch (err) {
+      const apiError = err as APIError;
+      setError(apiError.message || 'Failed to refresh teachers');
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  // Check if mutations are allowed
+  const mutationsDisabled = !hasActiveSession || creating || updating || loading;
 
   const columns: Column<Teacher>[] = [
     {
@@ -76,29 +174,24 @@ export function ManageTeachers() {
       key: 'mobile',
       header: 'Mobile',
       sortable: true,
-    },
-    {
-      key: 'subject',
-      header: 'Subject',
-      sortable: true,
-      render: (teacher) => <span className="text-gray-700">{teacher.subject || 'N/A'}</span>,
+      render: (teacher) => <span className="text-gray-700">{teacher.mobile}</span>,
     },
     {
       key: 'assignedClass',
       header: 'Assigned Class',
       sortable: true,
       render: (teacher) => (
-        <Badge variant="outline">{teacher.assignedClass || 'N/A'}</Badge>
+        <Badge variant="outline">{teacher.assignedClass || 'Not Assigned'}</Badge>
       ),
     },
     {
       key: 'status',
       header: 'Status',
       render: (teacher) => {
-        const status = (teacher.status || 'active').toLowerCase();
+        const status = (teacher.status || 'ACTIVE').toUpperCase();
         return (
-          <Badge variant={status === 'active' ? 'default' : 'secondary'}>
-            {status.charAt(0).toUpperCase() + status.slice(1)}
+          <Badge variant={status === 'ACTIVE' ? 'default' : 'secondary'}>
+            {status === 'ACTIVE' ? 'Active' : 'Disabled'}
           </Badge>
         );
       },
@@ -108,45 +201,52 @@ export function ManageTeachers() {
       header: 'Actions',
       render: (teacher) => {
         const teacherId = teacher._id || teacher.id || '';
+        const isDeleting = deletingTeacherId === teacherId;
+        const isDisabled = mutationsDisabled || isDeleting;
+
         return (
           <div className="flex items-center gap-2">
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => setIsModalOpen(true)}
+              title="Edit"
+              onClick={() => {
+                setEditingTeacher(teacher);
+                setIsModalOpen(true);
+              }}
+              disabled={isDisabled}
             >
               <Edit className="w-4 h-4" />
             </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-red-600 hover:text-red-700"
-            >
-              <Trash2 className="w-4 h-4" />
-            </Button>
+            {canDelete && (
+              <Button
+                variant="ghost"
+                size="sm"
+                title="Delete"
+                onClick={() => handleDelete(teacherId)}
+                className="text-red-600 hover:text-red-700"
+                disabled={isDisabled}
+              >
+                {isDeleting ? '...' : <Trash2 className="w-4 h-4" />}
+              </Button>
+            )}
+            {!canDelete && (
+              <span className="text-xs text-gray-400" title="Only Superadmin can delete teachers">
+                Delete (N/A)
+              </span>
+            )}
           </div>
         );
       },
     },
   ];
 
-  if (loading) {
+  if (loading && teachers.length === 0) {
     return (
       <div className="space-y-6">
         <div>
           <h1 className="text-gray-900 mb-2 text-2xl font-bold">Manage Teachers</h1>
           <p className="text-gray-600">Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-gray-900 mb-2 text-2xl font-bold">Manage Teachers</h1>
-          <p className="text-red-600">Error: {error}</p>
         </div>
       </div>
     );
@@ -160,11 +260,46 @@ export function ManageTeachers() {
           <h1 className="text-gray-900 mb-2 text-2xl font-bold">Manage Teachers</h1>
           <p className="text-gray-600">Manage teachers for your school</p>
         </div>
-        <Button onClick={() => setIsModalOpen(true)} className="bg-blue-600 hover:bg-blue-700">
+        <Button 
+          onClick={() => {
+            setEditingTeacher(null);
+            setIsModalOpen(true);
+          }} 
+          className="bg-blue-600 hover:bg-blue-700"
+          disabled={mutationsDisabled}
+        >
           <Plus className="w-4 h-4 mr-2" />
           Add New Teacher
         </Button>
       </div>
+
+      {/* Error Display */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-md p-4">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm text-red-600 font-medium">Error</p>
+              <p className="text-sm text-red-600 mt-1">{error}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* No Active Session Warning */}
+      {!hasActiveSession && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-md p-6">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm text-yellow-600 font-medium">No Active Session</p>
+              <p className="text-sm text-yellow-600 mt-1">
+                No active session found for this school. Teacher management operations are disabled until an active session is available.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* School Header */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">
@@ -182,7 +317,11 @@ export function ManageTeachers() {
       </div>
 
       {/* Teachers Table */}
-      {teachers.length > 0 ? (
+      {loading ? (
+        <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+          <p className="text-gray-600">Loading teachers...</p>
+        </div>
+      ) : teachers.length > 0 ? (
         <div className="bg-white rounded-lg border border-gray-200">
           <DataTable
             columns={columns}
@@ -196,12 +335,32 @@ export function ManageTeachers() {
             <UserCircle className="w-8 h-8 text-gray-400" />
           </div>
           <p className="text-gray-600 mb-4">No teachers found</p>
-          <Button onClick={() => setIsModalOpen(true)} variant="outline">
+          <Button 
+            onClick={() => {
+              setEditingTeacher(null);
+              setIsModalOpen(true);
+            }} 
+            variant="outline"
+            disabled={mutationsDisabled}
+          >
             <Plus className="w-4 h-4 mr-2" />
             Add Teacher
           </Button>
         </div>
       )}
+
+      {/* Add/Edit Modal */}
+      <AddTeacherModal
+        isOpen={isModalOpen}
+        onClose={() => {
+          setIsModalOpen(false);
+          setEditingTeacher(null);
+          setError(null);
+        }}
+        teacher={editingTeacher}
+        classes={classes}
+        onSave={editingTeacher ? handleUpdateTeacher : handleCreateTeacher}
+      />
     </div>
   );
 }

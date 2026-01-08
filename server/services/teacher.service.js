@@ -47,7 +47,7 @@ const createTeacher = async (teacherData) => {
     // Check if there's already a teacher assigned to this class (application-level check for early feedback)
     const existingTeacherForClass = await Teacher.findOne({
       classId: teacherData.classId,
-      status: 'active'
+      status: 'ACTIVE' // Enum value is uppercase
     });
 
     if (existingTeacherForClass) {
@@ -73,7 +73,7 @@ const createTeacher = async (teacherData) => {
         email: teacherData.email,
         schoolId: teacherData.schoolId,
         classId: { $in: activeSessionClassIds },
-        status: 'active'
+        status: 'ACTIVE' // Enum value is uppercase
       });
 
       if (existingTeacherInSession) {
@@ -201,8 +201,16 @@ const updateTeacher = async (teacherId, updateData, schoolId, userRole = null, u
     validateTeacherOwnership(teacher, userEmail);
     
     // Teachers cannot change their class assignment
-    if (updateData.classId && updateData.classId.toString() !== (teacher.classId?.toString() || '')) {
-      throw new Error('You cannot change your class assignment. Only administrators can assign teachers to classes.');
+    // Handle both populated and non-populated classId
+    if (updateData.classId) {
+      const updateClassId = updateData.classId.toString();
+      const teacherClassId = teacher.classId?._id 
+        ? teacher.classId._id.toString() 
+        : (teacher.classId?.toString() || '');
+      
+      if (updateClassId !== teacherClassId) {
+        throw new Error('You cannot change your class assignment. Only administrators can assign teachers to classes.');
+      }
     }
   }
 
@@ -212,14 +220,17 @@ const updateTeacher = async (teacherId, updateData, schoolId, userRole = null, u
     const currentClassObj = await Class.findOne({
       _id: teacher.classId,
       schoolId: schoolId, // STRICT: Filter by schoolId
-      status: 'active' // Only check active classes
+      status: 'ACTIVE' // Only check active classes (enum value is uppercase)
     }).populate('sessionId', 'activeStatus archived');
     
     if (!currentClassObj) {
       throw new Error('Class not found');
     }
     
-    if (currentClassObj.sessionId.toString() !== activeSession._id.toString()) {
+    // When sessionId is populated, it's a Session document, so use ._id to get the ObjectId
+    const currentClassSessionId = currentClassObj.sessionId._id ? currentClassObj.sessionId._id.toString() : currentClassObj.sessionId.toString();
+    
+    if (currentClassSessionId !== activeSession._id.toString()) {
       // Check if the class's session is archived
       if (currentClassObj.sessionId && currentClassObj.sessionId.archived) {
         throw new Error('Cannot modify teacher assigned to a class from an archived session. Archived sessions are read-only.');
@@ -229,12 +240,14 @@ const updateTeacher = async (teacherId, updateData, schoolId, userRole = null, u
   }
 
   // Check if email is being updated and if it's unique
+  // Note: Email updates are typically not allowed, but check anyway for validation
   if (updateData.email && updateData.email !== teacher.email) {
     // Only check active teachers (exclude deleted/inactive)
+    // Status enum value is uppercase 'ACTIVE'
     const existingTeacher = await Teacher.findOne({
       email: updateData.email,
       schoolId: schoolId,
-      status: 'active', // Only check active teachers
+      status: 'ACTIVE', // Only check active teachers (enum value is uppercase)
       _id: { $ne: teacherId } // Exclude current teacher from check
     });
 
@@ -244,18 +257,32 @@ const updateTeacher = async (teacherId, updateData, schoolId, userRole = null, u
   }
 
   // If classId is being updated, handle atomic reassignment
-  if (updateData.classId && updateData.classId.toString() !== (teacher.classId?.toString() || '')) {
+  // Handle both populated and non-populated classId
+  const updateClassId = updateData.classId ? updateData.classId.toString() : '';
+  const teacherClassId = teacher.classId?._id 
+    ? teacher.classId._id.toString() 
+    : (teacher.classId?.toString() || '');
+  
+  if (updateData.classId && updateClassId !== teacherClassId) {
     // SECURITY: Filter by schoolId to prevent cross-school access
     const classObj = await Class.findOne({
       _id: updateData.classId,
       schoolId: schoolId // STRICT: Filter by schoolId
     });
+    
     if (!classObj) {
       throw new Error('Class not found');
     }
 
     // Ensure class belongs to the active session
-    if (classObj.sessionId.toString() !== activeSession._id.toString()) {
+    // Handle both populated and non-populated sessionId
+    if (!classObj.sessionId) {
+      throw new Error('Class does not have a session assigned');
+    }
+    
+    const newClassSessionId = classObj.sessionId._id ? classObj.sessionId._id.toString() : classObj.sessionId.toString();
+    
+    if (newClassSessionId !== activeSession._id.toString()) {
       throw new Error('Cannot assign teacher to a class from an inactive session');
     }
 
@@ -264,7 +291,7 @@ const updateTeacher = async (teacherId, updateData, schoolId, userRole = null, u
     // Only check active teachers (exclude deleted/inactive)
     const existingTeacherForClass = await Teacher.findOne({
       classId: updateData.classId,
-      status: 'active', // Only check active teachers
+      status: 'ACTIVE', // Only check active teachers (enum value is uppercase)
       _id: { $ne: teacher._id } // Exclude current teacher from check
     });
 
@@ -291,7 +318,7 @@ const updateTeacher = async (teacherId, updateData, schoolId, userRole = null, u
         email: teacher.email, // Same teacher (by email)
         schoolId: schoolId,
         classId: { $in: activeSessionClassIds },
-        status: 'active', // Only check active teachers
+        status: 'ACTIVE', // Only check active teachers (enum value is uppercase)
         _id: { $ne: teacher._id } // Exclude current teacher record from check
       });
 
@@ -316,7 +343,7 @@ const updateTeacher = async (teacherId, updateData, schoolId, userRole = null, u
         await Teacher.updateMany(
           {
             classId: updateData.classId,
-            status: 'active',
+            status: 'ACTIVE', // Enum value is uppercase
             _id: { $ne: teacher._id } // Exclude current teacher
           },
           {
@@ -346,11 +373,13 @@ const updateTeacher = async (teacherId, updateData, schoolId, userRole = null, u
       });
 
       // Apply other updates (excluding classId which was already updated)
-      const otherUpdates = { ...updateData };
-      delete otherUpdates.classId;
+      // Only update allowed fields explicitly (name, mobile, photoUrl)
+      if (updateData.name !== undefined) updatedTeacher.name = updateData.name;
+      if (updateData.mobile !== undefined) updatedTeacher.mobile = updateData.mobile;
+      if (updateData.photoUrl !== undefined) updatedTeacher.photoUrl = updateData.photoUrl;
+      // Do NOT update: schoolId, userId, email (email validation handled above)
       
-      if (Object.keys(otherUpdates).length > 0) {
-        Object.assign(updatedTeacher, otherUpdates);
+      if (updateData.name !== undefined || updateData.mobile !== undefined || updateData.photoUrl !== undefined) {
         await updatedTeacher.save();
       }
 
@@ -370,7 +399,7 @@ const updateTeacher = async (teacherId, updateData, schoolId, userRole = null, u
         await Teacher.updateMany(
           {
             classId: updateData.classId,
-            status: 'active',
+            status: 'ACTIVE', // Enum value is uppercase
             _id: { $ne: teacher._id }
           },
           {
@@ -379,10 +408,15 @@ const updateTeacher = async (teacherId, updateData, schoolId, userRole = null, u
         );
 
         // Step 2: Update current teacher (unique index will prevent duplicates if race condition occurs)
-  Object.assign(teacher, updateData);
+        // Only update allowed fields
+        if (updateData.name !== undefined) teacher.name = updateData.name;
+        if (updateData.mobile !== undefined) teacher.mobile = updateData.mobile;
+        if (updateData.photoUrl !== undefined) teacher.photoUrl = updateData.photoUrl;
+        if (updateData.classId !== undefined) teacher.classId = updateData.classId;
+        // Do NOT update: schoolId, userId, email (email validation handled above)
         
         try {
-  await teacher.save();
+          await teacher.save();
           return teacher;
         } catch (saveError) {
           // Handle duplicate key error (database-level enforcement)
@@ -410,11 +444,18 @@ const updateTeacher = async (teacherId, updateData, schoolId, userRole = null, u
     }
   } else {
     // No classId change, just update other fields
-    Object.assign(teacher, updateData);
+    // Only update allowed fields explicitly (name, mobile, photoUrl)
+    if (updateData.name !== undefined) teacher.name = updateData.name;
+    if (updateData.mobile !== undefined) teacher.mobile = updateData.mobile;
+    if (updateData.photoUrl !== undefined) teacher.photoUrl = updateData.photoUrl;
+    // Do NOT update: schoolId, userId, email, classId (classId change handled above)
     
     try {
-      await teacher.save();
-  return teacher;
+      // Only save if there are actual updates
+      if (updateData.name !== undefined || updateData.mobile !== undefined || updateData.photoUrl !== undefined) {
+        await teacher.save();
+      }
+      return teacher;
     } catch (error) {
       // Handle duplicate key error (shouldn't happen if classId isn't changing, but just in case)
       if (error.code === 11000 || error.codeName === 'DuplicateKey') {
@@ -451,7 +492,7 @@ const deleteTeacher = async (teacherId, schoolId) => {
     const classObj = await Class.findOne({
       _id: teacher.classId,
       schoolId: schoolId, // STRICT: Filter by schoolId
-      status: 'active' // Only check active classes
+      status: 'ACTIVE' // Only check active classes (enum value is uppercase)
     });
     
     // If class is not found, continue deletion (don't block)

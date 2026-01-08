@@ -417,7 +417,7 @@ export const studentAPI = {
     schoolId?: string;
   }) => {
     return apiRequest<{ success: boolean; data: any[]; pagination?: any }>(
-      '/students',
+      '/students/students',
       { method: 'GET' },
       params
     );
@@ -426,7 +426,7 @@ export const studentAPI = {
   // Get student by ID
   getStudentById: async (studentId: string, schoolId?: string) => {
     return apiRequest<{ success: boolean; data: any }>(
-      `/students/${studentId}`,
+      `/students/students/${studentId}`,
       { method: 'GET' },
       { schoolId }
     );
@@ -447,10 +447,21 @@ export const studentAPI = {
     schoolId?: string;
   }) => {
     return apiRequest<{ success: boolean; data: any; message: string }>(
-      '/students',
+      '/students/students',
       {
         method: 'POST',
-        body: JSON.stringify(studentData),
+        body: JSON.stringify({
+          admissionNo: studentData.admissionNo,
+          name: studentData.name,
+          dob: studentData.dob,
+          fatherName: studentData.fatherName,
+          motherName: studentData.motherName,
+          mobile: studentData.mobile,
+          address: studentData.address,
+          classId: studentData.classId,
+          aadhaar: studentData.aadhaar,
+          photoUrl: studentData.photoUrl,
+        }),
       },
       { schoolId: studentData.schoolId }
     );
@@ -473,10 +484,20 @@ export const studentAPI = {
     }
   ) => {
     return apiRequest<{ success: boolean; data: any; message: string }>(
-      `/students/${studentId}`,
+      `/students/students/${studentId}`,
       {
         method: 'PATCH',
-        body: JSON.stringify(studentData),
+        body: JSON.stringify({
+          name: studentData.name,
+          dob: studentData.dob,
+          fatherName: studentData.fatherName,
+          motherName: studentData.motherName,
+          mobile: studentData.mobile,
+          address: studentData.address,
+          classId: studentData.classId,
+          aadhaar: studentData.aadhaar,
+          photoUrl: studentData.photoUrl,
+        }),
       },
       { schoolId: studentData.schoolId }
     );
@@ -485,7 +506,7 @@ export const studentAPI = {
   // Delete student
   deleteStudent: async (studentId: string, schoolId?: string) => {
     return apiRequest<{ success: boolean; message: string }>(
-      `/students/${studentId}`,
+      `/students/students/${studentId}`,
       { method: 'DELETE' },
       { schoolId }
     );
@@ -546,7 +567,14 @@ export const teacherAPI = {
       '/teachers',
       {
         method: 'POST',
-        body: JSON.stringify(teacherData),
+        body: JSON.stringify({
+          name: teacherData.name,
+          email: teacherData.email,
+          mobile: teacherData.mobile,
+          classId: teacherData.classId,
+          photoUrl: teacherData.photoUrl,
+          userId: teacherData.userId,
+        }),
       },
       { schoolId: teacherData.schoolId }
     );
@@ -567,7 +595,12 @@ export const teacherAPI = {
       `/teachers/${teacherId}`,
       {
         method: 'PATCH',
-        body: JSON.stringify(teacherData),
+        body: JSON.stringify({
+          name: teacherData.name,
+          mobile: teacherData.mobile,
+          classId: teacherData.classId,
+          photoUrl: teacherData.photoUrl,
+        }),
       },
       { schoolId: teacherData.schoolId }
     );
@@ -747,14 +780,17 @@ export const classAPI = {
   // Create class
   createClass: async (classData: {
     className: string;
-    sessionId: string;
+    sessionId?: string; // Optional - backend uses active session automatically
     schoolId?: string;
   }) => {
+    // Backend only needs className - sessionId is auto-set from active session
     return apiRequest<{ success: boolean; data: any; message: string }>(
       '/classes',
       {
         method: 'POST',
-        body: JSON.stringify(classData),
+        body: JSON.stringify({
+          className: classData.className,
+        }),
       },
       { schoolId: classData.schoolId }
     );

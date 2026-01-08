@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { School, Users, GraduationCap, Bell } from 'lucide-react';
+import { School, Users, GraduationCap, Bell, FileText, ExternalLink } from 'lucide-react';
 import { StatCard } from '../ui/StatCard';
 import { Button } from '../ui/button';
 import { schoolAPI, noticeAPI, APIError } from '../../utils/api';
@@ -170,6 +170,23 @@ export function SuperadminDashboard({ onNavigate }: SuperadminDashboardProps) {
                     </span>
                   </div>
                   <p className="text-gray-600 mb-2">{notice.description}</p>
+                  {notice.attachments && notice.attachments.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      {notice.attachments.map((attachment: string, idx: number) => (
+                        <a
+                          key={idx}
+                          href={attachment}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700"
+                        >
+                          <FileText className="w-4 h-4" />
+                          <span>Attachment {idx + 1}</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      ))}
+                    </div>
+                  )}
                   <p className="text-gray-500 text-sm">
                     {notice.createdAt ? new Date(notice.createdAt).toLocaleDateString() : ''}
                   </p>

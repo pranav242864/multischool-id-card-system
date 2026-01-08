@@ -15,12 +15,12 @@ const checkClassNotFrozen = (classObj, operation = 'modify') => {
 
   if (classObj.frozen) {
     const operationMessages = {
-      create: 'Cannot create student in a frozen class',
-      update: 'Cannot update student in a frozen class',
-      delete: 'Cannot delete student from a frozen class',
+      create: 'Cannot create student in a frozen class. Frozen classes cannot be modified.',
+      update: 'Cannot update student in a frozen class. Frozen classes cannot be modified.',
+      delete: 'Cannot delete student from a frozen class. Frozen classes cannot be modified.',
       promote: 'Cannot promote student from a frozen class',
       assign: 'Cannot assign student to a frozen class',
-      modify: 'Cannot modify student in a frozen class'
+      modify: 'Cannot modify student in a frozen class. Frozen classes cannot be modified.'
     };
     
     const message = operationMessages[operation] || `Cannot ${operation} student in a frozen class`;

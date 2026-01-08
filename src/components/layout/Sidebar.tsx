@@ -8,7 +8,8 @@ import {
   FileText,
   Calendar,
   X,
-  ChevronLeft
+  ChevronLeft,
+  FileSearch
 } from 'lucide-react';
 import { Button } from '../ui/button';
 
@@ -30,10 +31,12 @@ export function Sidebar({ userRole, currentView, onNavigate, isOpen, onToggle }:
     { id: 'students', label: 'Manage Students', icon: GraduationCap },
     { id: 'templates', label: 'Manage Templates', icon: FileText },
     { id: 'bulk', label: 'Bulk Operations', icon: Upload },
+    { id: 'logs', label: 'Login Logs', icon: FileSearch },
   ];
 
   const schooladminItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'classes', label: 'Manage Classes', icon: GraduationCap },
     { id: 'students', label: 'Manage Students', icon: GraduationCap },
     { id: 'templates', label: 'ID Card Templates', icon: FileText },
     { id: 'teachers', label: 'Manage Teachers', icon: UserCircle },

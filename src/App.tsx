@@ -9,12 +9,14 @@ import { ManageSchoolAdmins } from './components/superadmin/ManageSchoolAdmins';
 import { SchooladminDashboard } from './components/schooladmin/SchooladminDashboard';
 import { ManageStudents } from './components/schooladmin/ManageStudents';
 import { ManageStudents as SuperadminManageStudents } from './components/superadmin/ManageStudents';
+import { ManageClasses } from './components/schooladmin/ManageClasses';
 import { ManageTeachers } from './components/schooladmin/ManageTeachers';
 import { ManageTeachers as SuperadminManageTeachers } from './components/superadmin/ManageTeachers';
 import { BulkOperations } from './components/schooladmin/BulkOperations';
 import { BulkOperations as SuperadminBulkOperations } from './components/superadmin/BulkOperations';
 import { TemplateManagement } from './components/schooladmin/TemplateManagement';
 import { TemplateManagement as SuperadminTemplateManagement } from './components/superadmin/TemplateManagement';
+import { LoginLogs } from './components/superadmin/LoginLogs';
 import { TeacherDashboard } from './components/teacher/TeacherDashboard';
 import { BulkOperations as TeacherBulkOperations } from './components/teacher/BulkOperations';
 
@@ -75,6 +77,8 @@ export default function App() {
           return <SuperadminManageStudents />;
         case 'bulk':
           return <SuperadminBulkOperations userRole="superadmin" />;
+        case 'logs':
+          return <LoginLogs />;
         default:
           return <SuperadminDashboard onNavigate={setCurrentView} />;
       }
@@ -85,6 +89,8 @@ export default function App() {
       switch (currentView) {
         case 'dashboard':
           return <SchooladminDashboard onNavigate={setCurrentView} />;
+        case 'classes':
+          return <ManageClasses />;
         case 'students':
           return <ManageStudents />;
         case 'teachers':

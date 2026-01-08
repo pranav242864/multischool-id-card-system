@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import { DataTable, Column } from '../ui/DataTable';
 import { Button } from '../ui/button';
-import { GraduationCap, ImageIcon, Edit, Trash2, Upload, Download, FileSpreadsheet, Image, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
+import { GraduationCap, ImageIcon, Edit, Trash2, Upload, Download, FileSpreadsheet, Image, CheckCircle2, XCircle, Loader2, Bell, FileText, ExternalLink } from 'lucide-react';
 import { Badge } from '../ui/badge';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { AddStudentModal } from '../modals/AddStudentModal';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { templateAPI, bulkImportAPI, studentAPI, APIError } from '../../utils/api';
+import { templateAPI, bulkImportAPI, studentAPI, noticeAPI, APIError } from '../../utils/api';
 import ExcelJS from 'exceljs';
 
 interface Student {
@@ -45,6 +45,30 @@ export function TeacherDashboard() {
   const [loadingStudents, setLoadingStudents] = useState(true);
   const [studentsError, setStudentsError] = useState<string | null>(null);
   const [assignedClass, setAssignedClass] = useState<string>('');
+  const [notices, setNotices] = useState<any[]>([]);
+  const [loadingNotices, setLoadingNotices] = useState(true);
+  const [noticesError, setNoticesError] = useState<string | null>(null);
+
+  // Fetch notices for teacher
+  useEffect(() => {
+    const fetchNotices = async () => {
+      setLoadingNotices(true);
+      setNoticesError(null);
+      try {
+        const response = await noticeAPI.getNotices();
+        if (response.success && response.data) {
+          setNotices(response.data.slice(0, 3)); // Show latest 3
+        }
+      } catch (err) {
+        const apiError = err as APIError;
+        setNoticesError(apiError.message || 'Failed to load notices');
+        setNotices([]);
+      } finally {
+        setLoadingNotices(false);
+      }
+    };
+    fetchNotices();
+  }, []);
 
   // Fetch students for teacher's assigned class
   useEffect(() => {
