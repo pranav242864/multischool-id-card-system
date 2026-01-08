@@ -6,6 +6,7 @@ import {
   UserCircle, 
   Upload, 
   FileText,
+  Calendar,
   X,
   ChevronLeft
 } from 'lucide-react';
@@ -23,6 +24,7 @@ export function Sidebar({ userRole, currentView, onNavigate, isOpen, onToggle }:
   const superadminItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'schools', label: 'Manage Schools', icon: School },
+    { id: 'sessions', label: 'Manage Sessions', icon: Calendar },
     { id: 'admins', label: 'Manage Admins', icon: Users },
     { id: 'teachers', label: 'Manage Teachers', icon: UserCircle },
     { id: 'students', label: 'Manage Students', icon: GraduationCap },

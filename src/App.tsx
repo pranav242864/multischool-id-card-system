@@ -4,6 +4,7 @@ import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
 import { SuperadminDashboard } from './components/superadmin/SuperadminDashboard';
 import { ManageSchools } from './components/superadmin/ManageSchools';
+import { ManageSessions } from './components/superadmin/ManageSessions';
 import { ManageSchoolAdmins } from './components/superadmin/ManageSchoolAdmins';
 import { SchooladminDashboard } from './components/schooladmin/SchooladminDashboard';
 import { ManageStudents } from './components/schooladmin/ManageStudents';
@@ -62,6 +63,8 @@ export default function App() {
           return <SuperadminDashboard onNavigate={setCurrentView} />;
         case 'schools':
           return <ManageSchools />;
+        case 'sessions':
+          return <ManageSessions />;
         case 'admins':
           return <ManageSchoolAdmins />;
         case 'teachers':

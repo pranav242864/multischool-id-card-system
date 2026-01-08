@@ -6,7 +6,7 @@ const getAuthToken = (): string | null => {
 };
 
 // Get user role from localStorage (stored after login)
-const getUserRole = (): string | null => {
+export const getUserRole = (): string | null => {
   const userStr = localStorage.getItem('user');
   if (userStr) {
     try {
@@ -662,8 +662,8 @@ export const schoolAPI = {
 export const sessionAPI = {
   // Get sessions
   getSessions: async (schoolId?: string) => {
-    return apiRequest<{ success: boolean; data: any[] }>(
-      '/sessions',
+    return apiRequest<{ success: boolean; data: any[]; pagination?: any }>(
+      '/sessions/sessions',
       { method: 'GET' },
       { schoolId }
     );
@@ -672,7 +672,7 @@ export const sessionAPI = {
   // Get session by ID
   getSessionById: async (sessionId: string, schoolId?: string) => {
     return apiRequest<{ success: boolean; data: any }>(
-      `/sessions/${sessionId}`,
+      `/sessions/sessions/${sessionId}`,
       { method: 'GET' },
       { schoolId }
     );
@@ -686,10 +686,14 @@ export const sessionAPI = {
     schoolId?: string;
   }) => {
     return apiRequest<{ success: boolean; data: any; message: string }>(
-      '/sessions',
+      '/sessions/sessions',
       {
         method: 'POST',
-        body: JSON.stringify(sessionData),
+        body: JSON.stringify({
+          sessionName: sessionData.sessionName,
+          startDate: sessionData.startDate,
+          endDate: sessionData.endDate,
+        }),
       },
       { schoolId: sessionData.schoolId }
     );
@@ -698,7 +702,7 @@ export const sessionAPI = {
   // Activate session
   activateSession: async (sessionId: string, schoolId?: string) => {
     return apiRequest<{ success: boolean; data: any; message: string }>(
-      `/sessions/${sessionId}/activate`,
+      `/sessions/sessions/${sessionId}/activate`,
       { method: 'PATCH' },
       { schoolId }
     );
@@ -707,7 +711,7 @@ export const sessionAPI = {
   // Deactivate session
   deactivateSession: async (sessionId: string, schoolId?: string) => {
     return apiRequest<{ success: boolean; data: any; message: string }>(
-      `/sessions/${sessionId}/deactivate`,
+      `/sessions/sessions/${sessionId}/deactivate`,
       { method: 'PATCH' },
       { schoolId }
     );
