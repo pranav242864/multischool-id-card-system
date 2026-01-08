@@ -35,7 +35,8 @@ export function BulkOperations({ userRole }: BulkOperationsProps) {
   const [error, setError] = useState<string | null>(null);
 
   // School admin's own school (in real app, this would come from user context)
-  const ownSchool = 'Greenfield Public School';
+  // School name will come from user context or API
+  // For now, left empty as it's not needed for bulk operations
 
   // Fetch templates when entity type changes
   useEffect(() => {
@@ -43,13 +44,11 @@ export function BulkOperations({ userRole }: BulkOperationsProps) {
       setIsLoadingTemplates(true);
       setError(null);
       try {
-        const response = await templateAPI.getTemplates(entityType);
+        const typeUpper = entityType.toUpperCase() as 'STUDENT' | 'TEACHER';
+        const response = await templateAPI.getTemplates(typeUpper);
         if (response.success && response.data) {
-          // Filter templates by own school (assuming schoolId matches school name for now)
-          const schoolTemplates = response.data.filter((t: Template) => 
-            t.schoolId === ownSchool || !t.schoolId
-          );
-          setTemplates(schoolTemplates);
+          // Templates are already filtered by school via schoolScoping middleware
+          setTemplates(response.data);
           // Auto-select the first template if available
           if (schoolTemplates.length > 0 && !selectedTemplateId) {
             setSelectedTemplateId(schoolTemplates[0]._id);

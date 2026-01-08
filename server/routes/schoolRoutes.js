@@ -18,13 +18,13 @@ router.use(schoolScoping);
 // POST /api/v1/schools - Create a new school (Superadmin only)
 router.post('/schools', requireRole('SUPERADMIN'), createSchool);
 
-// GET /api/v1/schools - Get all schools (Superadmin) or own school (Schooladmin)
-router.get('/schools', requireRole('SUPERADMIN', 'SCHOOLADMIN'), getAllSchools);
+// GET /api/v1/schools - Get all schools (Superadmin only)
+router.get('/schools', requireRole('SUPERADMIN'), getAllSchools);
 
-// GET /api/v1/schools/:id - Get single school by ID
-router.get('/schools/:id', requireRole('SUPERADMIN', 'SCHOOLADMIN'), getSchool);
+// GET /api/v1/schools/:id - Get single school by ID (Superadmin only)
+router.get('/schools/:id', requireRole('SUPERADMIN'), getSchool);
 
-// DELETE /api/v1/schools/:id - Soft delete a school and its related data
+// DELETE /api/v1/schools/:id - Soft delete a school and its related data (Superadmin only)
 router.delete('/schools/:id', requireRole('SUPERADMIN'), deleteSchool);
 
 module.exports = router;

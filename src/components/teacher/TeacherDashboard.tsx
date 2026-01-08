@@ -6,7 +6,7 @@ import { Badge } from '../ui/badge';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { AddStudentModal } from '../modals/AddStudentModal';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { templateAPI, bulkImportAPI } from '../../utils/api';
+import { templateAPI, bulkImportAPI, studentAPI, APIError } from '../../utils/api';
 import ExcelJS from 'exceljs';
 
 interface Student {
@@ -41,36 +41,47 @@ export function TeacherDashboard() {
   const [recentImports, setRecentImports] = useState<Array<{ file: string; records: number; status: 'success' | 'error'; date: string }>>([]);
   const [error, setError] = useState<string | null>(null);
 
-  // Teacher's assigned class
-  const assignedClass = 'Class 10-A';
-  const ownSchool = 'Greenfield Public School';
+  const [students, setStudents] = useState<Student[]>([]);
+  const [loadingStudents, setLoadingStudents] = useState(true);
+  const [studentsError, setStudentsError] = useState<string | null>(null);
+  const [assignedClass, setAssignedClass] = useState<string>('');
 
-  const [students, setStudents] = useState<Student[]>([
-    {
-      id: '1',
-      admissionNo: 'GPS1001',
-      name: 'Emily Johnson',
-      fatherName: 'Robert Johnson',
-      mobile: '+1 234 567 8901',
-      dob: '2010-05-15',
-    },
-    {
-      id: '2',
-      admissionNo: 'GPS1002',
-      name: 'Michael Chen',
-      fatherName: 'David Chen',
-      mobile: '+1 234 567 8902',
-      dob: '2010-08-22',
-    },
-    {
-      id: '3',
-      admissionNo: 'GPS1005',
-      name: 'Jessica Davis',
-      fatherName: 'William Davis',
-      mobile: '+1 234 567 8903',
-      dob: '2010-06-18',
-    },
-  ]);
+  // Fetch students for teacher's assigned class
+  useEffect(() => {
+    const fetchStudents = async () => {
+      setLoadingStudents(true);
+      setStudentsError(null);
+      try {
+        const response = await studentAPI.getStudents();
+        if (response.success && response.data) {
+          // Map backend data to frontend format
+          const mappedStudents = response.data.map((student: any) => ({
+            _id: student._id,
+            id: student._id,
+            admissionNo: student.admissionNo,
+            photo: student.photoUrl,
+            name: student.name,
+            fatherName: student.fatherName || '',
+            mobile: student.mobile || '',
+            dob: student.dob ? new Date(student.dob).toISOString().split('T')[0] : '',
+          }));
+          setStudents(mappedStudents);
+          
+          // Set assigned class from first student's class (if available)
+          if (mappedStudents.length > 0 && mappedStudents[0].classId?.className) {
+            setAssignedClass(mappedStudents[0].classId.className);
+          }
+        }
+      } catch (err) {
+        const apiError = err as APIError;
+        setStudentsError(apiError.message || 'Failed to load students');
+      } finally {
+        setLoadingStudents(false);
+      }
+    };
+
+    fetchStudents();
+  }, []);
 
   const handleEdit = (student: Student) => {
     setEditingStudent(student);
@@ -78,9 +89,8 @@ export function TeacherDashboard() {
   };
 
   const handleDelete = (studentId: string) => {
-    if (window.confirm('Are you sure you want to delete this student?')) {
-      setStudents(students.filter(s => s.id !== studentId));
-    }
+    // TODO: Wire delete API when CRUD is implemented
+    console.log('Delete student:', studentId);
   };
 
   // Fetch templates for students
@@ -377,9 +387,11 @@ export function TeacherDashboard() {
       <div>
         <div className="flex items-center gap-3 mb-2">
           <h1 className="text-gray-900">My Class</h1>
-          <Badge variant="outline" className="bg-blue-50 text-blue-700">
-            Class 10-A
-          </Badge>
+          {assignedClass && (
+            <Badge variant="outline" className="bg-blue-50 text-blue-700">
+              {assignedClass}
+            </Badge>
+          )}
         </div>
         <p className="text-gray-600">Manage your assigned class students</p>
       </div>
@@ -405,7 +417,8 @@ export function TeacherDashboard() {
             </div>
             <div>
               <p className="text-gray-600">Boys</p>
-              <p className="text-gray-900">20</p>
+              <p className="text-gray-900">-</p>
+              <p className="text-gray-500 text-xs">Gender data not available</p>
             </div>
           </div>
         </div>
@@ -417,7 +430,8 @@ export function TeacherDashboard() {
             </div>
             <div>
               <p className="text-gray-600">Girls</p>
-              <p className="text-gray-900">18</p>
+              <p className="text-gray-900">-</p>
+              <p className="text-gray-500 text-xs">Gender data not available</p>
             </div>
           </div>
         </div>
@@ -434,11 +448,28 @@ export function TeacherDashboard() {
         <TabsContent value="students" className="space-y-6">
           <div>
             <h2 className="text-gray-900 mb-4">Student List</h2>
-            <DataTable
-              columns={columns}
-              data={students}
-              searchPlaceholder="Search students..."
-            />
+            {loadingStudents ? (
+              <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+                <p className="text-gray-600">Loading students...</p>
+              </div>
+            ) : studentsError ? (
+              <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+                <p className="text-red-600">Error: {studentsError}</p>
+              </div>
+            ) : students.length === 0 ? (
+              <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <GraduationCap className="w-8 h-8 text-gray-400" />
+                </div>
+                <p className="text-gray-600 mb-4">No students found in your assigned class</p>
+              </div>
+            ) : (
+              <DataTable
+                columns={columns}
+                data={students}
+                searchPlaceholder="Search students..."
+              />
+            )}
           </div>
         </TabsContent>
 
@@ -450,7 +481,7 @@ export function TeacherDashboard() {
                 <GraduationCap className="w-6 h-6 text-blue-600" />
               </div>
               <div>
-                <h2 className="text-gray-900 font-semibold text-lg">{assignedClass}</h2>
+                <h2 className="text-gray-900 font-semibold text-lg">{assignedClass || 'My Class'}</h2>
                 <p className="text-gray-600 text-sm">
                   Import student data and photos in bulk
                 </p>

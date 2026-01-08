@@ -1,87 +1,133 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { DataTable, Column } from '../ui/DataTable';
 import { Button } from '../ui/button';
 import { Plus, Edit, Trash2, MapPin, Lock, ChevronDown, School } from 'lucide-react';
 import { AddSchoolModal } from '../modals/AddSchoolModal';
 import { ChangePasswordModal } from '../modals/ChangePasswordModal';
 import { Badge } from '../ui/badge';
+import { schoolAPI, sessionAPI, APIError } from '../../utils/api';
 
 interface School {
-  id: string;
+  _id?: string;
+  id?: string;
   name: string;
-  city: string;
+  city?: string;
   icon?: string;
-  adminName: string;
-  adminEmail: string;
-  studentCount: number;
-  status: 'active' | 'inactive';
+  adminName?: string;
+  adminEmail?: string;
+  address?: string;
+  contactEmail?: string;
+  studentCount?: number;
+  status?: 'active' | 'inactive' | 'ACTIVE' | 'INACTIVE';
 }
 
 export function ManageSchools() {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const [editingSchool, setEditingSchool] = useState<School | null>(null);
   const [selectedSchoolForPassword, setSelectedSchoolForPassword] = useState<School | null>(null);
   const [selectedSchools, setSelectedSchools] = useState<string[]>([]);
-  const [schools, setSchools] = useState<School[]>(
-    [
-      { id: '1', name: 'Greenfield Public School', city: 'New York', adminName: 'John Doe', adminEmail: 'john@greenfield.edu', studentCount: 1200, status: 'active' },
-      { id: '2', name: 'Riverside High School', city: 'Los Angeles', adminName: 'Michael Chen', adminEmail: 'michael@riverside.edu', studentCount: 850, status: 'active' },
-      { id: '3', name: 'Oakwood Academy', city: 'Chicago', adminName: 'Sarah Williams', adminEmail: 'sarah@oakwood.edu', studentCount: 640, status: 'active' },
-      { id: '4', name: 'Maple Grove School', city: 'Houston', adminName: 'David Brown', adminEmail: 'david@maplegrove.edu', studentCount: 520, status: 'inactive' },
-    ]
-  );
-
-  // Session selector state — include "All sessions" and make it the default
-  const sessions = ['All sessions', '2023/2024', '2024/2025', '2025/2026'];
-  const [selectedSession, setSelectedSession] = useState<string>(sessions[0]);
+  const [schools, setSchools] = useState<School[]>([]);
+  const [sessions, setSessions] = useState<string[]>(['All sessions']);
+  const [selectedSession, setSelectedSession] = useState<string>('All sessions');
   const [showSessionMenu, setShowSessionMenu] = useState(false);
-
-  // New: local search state and derived filtered data
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [deletingSchoolId, setDeletingSchoolId] = useState<string | null>(null);
+
+  const fetchSchools = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await schoolAPI.getSchools();
+      if (response.success && response.data) {
+        // Map backend data to frontend format
+        const mappedSchools = response.data.map((school: any) => ({
+          _id: school._id,
+          id: school._id,
+          name: school.name,
+          city: school.city || '',
+          address: school.address || '',
+          contactEmail: school.contactEmail || '',
+          adminName: school.adminName || '',
+          adminEmail: school.adminEmail || school.contactEmail || '',
+          studentCount: school.studentCount || 0,
+          status: (school.status || 'active').toLowerCase() as 'active' | 'inactive',
+        }));
+        setSchools(mappedSchools);
+      }
+    } catch (err) {
+      const apiError = err as APIError;
+      setError(apiError.message || 'Failed to load schools');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSchools();
+  }, []);
+
   const filteredSchools = schools.filter((s) => {
     const q = searchQuery.trim().toLowerCase();
     if (!q) return true;
     return (
       s.name.toLowerCase().includes(q) ||
-      s.adminName.toLowerCase().includes(q) ||
-      s.adminEmail.toLowerCase().includes(q)
+      (s.adminName && s.adminName.toLowerCase().includes(q)) ||
+      (s.adminEmail && s.adminEmail.toLowerCase().includes(q)) ||
+      (s.contactEmail && s.contactEmail.toLowerCase().includes(q))
     );
   });
-
-  // Selection mode state: toggles visibility of checkbox column and selection UI
-  const [selectionMode, setSelectionMode] = useState(false);
 
   const handleEdit = (school: School) => {
     setEditingSchool(school);
     setIsModalOpen(true);
   };
 
-  const handleDelete = (schoolId: string) => {
-    setSchools(schools.filter(s => s.id !== schoolId));
-    setSelectedSchools(selectedSchools.filter(id => id !== schoolId));
+  const handleDelete = async (schoolId: string) => {
+    if (!window.confirm('Are you sure you want to delete this school? This action cannot be undone.')) {
+      return;
+    }
+
+    setDeletingSchoolId(schoolId);
+    setError(null);
+
+    try {
+      await schoolAPI.deleteSchool(schoolId);
+      // Re-fetch schools after successful delete
+      await fetchSchools();
+      setSelectedSchools(selectedSchools.filter(id => id !== schoolId));
+    } catch (err) {
+      const apiError = err as APIError;
+      setError(apiError.message || 'Failed to delete school');
+    } finally {
+      setDeletingSchoolId(null);
+    }
   };
 
   const handleChangePassword = (schoolId: string) => {
-    const school = schools.find(s => s.id === schoolId);
+    const school = schools.find(s => (s._id || s.id) === schoolId);
     if (school) {
       setSelectedSchoolForPassword(school);
       setIsPasswordModalOpen(true);
     }
   };
 
-  const handleAddSchool = (newSchool: School) => {
-    setSchools([...schools, { ...newSchool, id: Date.now().toString() }]);
-    setIsModalOpen(false);
+  const handleAddSchool = async (newSchool: School) => {
+    // Modal handles the API call, we just need to re-fetch
+    await fetchSchools();
   };
 
-  const handleUpdateSchool = (updatedSchool: School) => {
-    setSchools(schools.map(s => (s.id === updatedSchool.id ? updatedSchool : s)));
+  const handleUpdateSchool = async (updatedSchool: School) => {
+    // TODO: Wire update API when PATCH endpoint is implemented
+    console.log('Update school:', updatedSchool);
     setIsModalOpen(false);
     setEditingSchool(null);
+    await fetchSchools();
   };
 
-  // ✅ Handle checkbox selections
   const toggleSelect = (schoolId: string) => {
     setSelectedSchools(prev =>
       prev.includes(schoolId)
@@ -94,16 +140,39 @@ export function ManageSchools() {
     if (selectedSchools.length === schools.length) {
       setSelectedSchools([]);
     } else {
-      setSelectedSchools(schools.map(s => s.id));
+      setSelectedSchools(schools.map(s => s._id || s.id || '').filter(Boolean));
     }
   };
 
-  const handleBulkDelete = () => {
-    setSchools(schools.filter(s => !selectedSchools.includes(s.id)));
-    setSelectedSchools([]);
+  const handleBulkDelete = async () => {
+    if (!window.confirm(`Are you sure you want to delete ${selectedSchools.length} school(s)? This action cannot be undone.`)) {
+      return;
+    }
+
+    setError(null);
+    const errors: string[] = [];
+    let successCount = 0;
+
+    for (const schoolId of selectedSchools) {
+      try {
+        await schoolAPI.deleteSchool(schoolId);
+        successCount++;
+      } catch (err) {
+        const apiError = err as APIError;
+        errors.push(`${schoolId}: ${apiError.message || 'Failed to delete'}`);
+      }
+    }
+
+    // Re-fetch schools after bulk delete
+    await fetchSchools();
+
+    if (errors.length > 0) {
+      setError(`Deleted ${successCount} school(s). Errors: ${errors.join('; ')}`);
+    } else {
+      setSelectedSchools([]);
+    }
   };
 
-  // Build columns dynamically so checkbox column only appears in selection mode
   const checkboxColumn: Column<School> = {
     key: 'select',
     header: (
@@ -112,19 +181,23 @@ export function ManageSchools() {
         checked={selectedSchools.length === schools.length && schools.length > 0}
         onChange={toggleSelectAll}
         className="w-4 h-4 accent-blue-600 cursor-pointer"
+        disabled={loading}
       />
     ),
-    render: (school) => (
-      <input
-        type="checkbox"
-        checked={selectedSchools.includes(school.id)}
-        onChange={() => toggleSelect(school.id)}
-        className="w-4 h-4 accent-blue-600 cursor-pointer"
-      />
-    ),
+    render: (school) => {
+      const schoolId = school._id || school.id || '';
+      return (
+        <input
+          type="checkbox"
+          checked={selectedSchools.includes(schoolId)}
+          onChange={() => toggleSelect(schoolId)}
+          className="w-4 h-4 accent-blue-600 cursor-pointer"
+          disabled={loading}
+        />
+      );
+    },
   };
 
-  // base columns (without checkbox)
   const baseColumns: Column<School>[] = [
     {
       key: 'icon',
@@ -149,13 +222,21 @@ export function ManageSchools() {
     },
     {
       key: 'adminName',
-      header: 'Admin Name',
+      header: 'Contact Info',
       sortable: true,
       render: (school) => (
         <div>
-          <p className="text-gray-900 font-medium">{school.adminName}</p>
-          <p className="text-sm text-gray-600">{school.adminEmail}</p>
+          <p className="text-gray-900 font-medium">{school.adminName || 'N/A'}</p>
+          <p className="text-sm text-gray-600">{school.contactEmail || school.adminEmail || ''}</p>
         </div>
+      ),
+    },
+    {
+      key: 'address',
+      header: 'Address',
+      sortable: true,
+      render: (school) => (
+        <span className="text-gray-700">{school.address || 'N/A'}</span>
       ),
     },
     {
@@ -164,55 +245,75 @@ export function ManageSchools() {
       sortable: true,
       render: (school) => (
         <span className="text-gray-900 font-medium">
-          {school.studentCount.toLocaleString()}
+          {(school.studentCount || 0).toLocaleString()}
         </span>
       ),
     },
     {
       key: 'status',
       header: 'Status',
-      render: (school) => (
-        <Badge variant={school.status === 'active' ? 'default' : 'secondary'}>
-          {school.status.charAt(0).toUpperCase() + school.status.slice(1)}
-        </Badge>
-      ),
+      render: (school) => {
+        const status = (school.status || 'active').toLowerCase();
+        return (
+          <Badge variant={status === 'active' ? 'default' : 'secondary'}>
+            {status.charAt(0).toUpperCase() + status.slice(1)}
+          </Badge>
+        );
+      },
     },
     {
       key: 'actions',
       header: 'Actions',
-      render: (school) => (
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => handleEdit(school)}
-            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-          >
-            <Edit className="w-4 h-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => handleChangePassword(school.id)}
-            className="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
-          >
-            <Lock className="w-4 h-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => handleDelete(school.id)}
-            className="text-red-600 hover:text-red-700 hover:bg-red-50"
-          >
-            <Trash2 className="w-4 h-4" />
-          </Button>
-        </div>
-      ),
+      render: (school) => {
+        const schoolId = school._id || school.id || '';
+        const isDeleting = deletingSchoolId === schoolId;
+        return (
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => handleEdit(school)}
+              className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+              disabled={loading || isDeleting}
+            >
+              <Edit className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => handleChangePassword(schoolId)}
+              className="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+              disabled={loading || isDeleting}
+            >
+              <Lock className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => handleDelete(schoolId)}
+              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+              disabled={loading || isDeleting}
+            >
+              {isDeleting ? '...' : <Trash2 className="w-4 h-4" />}
+            </Button>
+          </div>
+        );
+      },
     },
   ];
 
-  // Final columns: include checkboxColumn at start only when selectionMode is true
   const columns: Column<School>[] = selectionMode ? [checkboxColumn, ...baseColumns] : baseColumns;
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-gray-900 mb-2 text-2xl font-bold">Manage Schools</h1>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -224,56 +325,77 @@ export function ManageSchools() {
         </div>
 
         <div className="flex gap-2 items-center">
-          {/* Keep only Add New School in header controls; selection controls moved to toolbar */}
-          <Button onClick={() => setIsModalOpen(true)} className="bg-blue-600 hover:bg-blue-700">
+          <Button 
+            onClick={() => setIsModalOpen(true)} 
+            className="bg-blue-600 hover:bg-blue-700"
+            disabled={loading}
+          >
             <Plus className="w-4 h-4 mr-2" />
             Add New School
           </Button>
         </div>
       </div>
 
-      {/* Toolbar: single Search (250px) + Select/Cancel + Session in one horizontal row */}
+      {/* Error Display */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-md p-4">
+          <p className="text-sm text-red-600">{error}</p>
+        </div>
+      )}
+
+      {/* Toolbar */}
       <div className="flex items-center gap-4 mb-4">
-        {/* Search (fixed ~250px) */}
         <input
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search schools..."
           className="w-[250px] px-3 py-2 border border-gray-200 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm bg-white"
+          disabled={loading}
         />
 
-        {/* Select / Cancel Selection button (next to search) */}
         {selectionMode ? (
-          <Button
-            onClick={() => {
-              setSelectionMode(false);
-              setSelectedSchools([]);
-            }}
-            variant="ghost"
-            className="border border-gray-200 hover:bg-gray-50 text-sm"
-          >
-            Cancel Selection
-          </Button>
+          <>
+            {selectedSchools.length > 0 && (
+              <Button
+                onClick={handleBulkDelete}
+                variant="destructive"
+                size="sm"
+                disabled={loading || deletingSchoolId !== null}
+              >
+                Delete Selected ({selectedSchools.length})
+              </Button>
+            )}
+            <Button
+              onClick={() => {
+                setSelectionMode(false);
+                setSelectedSchools([]);
+              }}
+              variant="ghost"
+              className="border border-gray-200 hover:bg-gray-50 text-sm"
+            >
+              Cancel Selection
+            </Button>
+          </>
         ) : (
           <Button
             onClick={() => setSelectionMode(true)}
             variant="outline"
             className="text-gray-700 bg-white border-gray-200 hover:bg-gray-50 text-sm"
+            disabled={loading}
           >
             Select
           </Button>
         )}
 
-        {/* push session dropdown to the far right */}
         <div className="flex-1" />
 
-        {/* Session selector (right) */}
         <div className="flex-shrink-0 relative">
           <Button
             variant="outline"
             onClick={() => setShowSessionMenu((prev) => !prev)}
             className="flex items-center gap-2 text-gray-700 bg-white border-gray-200 hover:bg-gray-50 text-sm"
+            disabled={loading}
           >
             <span className="hidden sm:inline">Session:</span> {selectedSession}
             <ChevronDown className="w-4 h-4" />
@@ -298,12 +420,25 @@ export function ManageSchools() {
         </div>
       </div>
 
-      {/* Table: pass filtered data */}
-      {/* <DataTable columns={columns} data={filteredSchools} /> */}
-      <DataTable columns={columns} data={filteredSchools} showSearch={false} />
-
-      
-
+      {/* Table */}
+      {schools.length === 0 ? (
+        <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <School className="w-8 h-8 text-gray-400" />
+          </div>
+          <p className="text-gray-600 mb-4">No schools found</p>
+          <Button 
+            onClick={() => setIsModalOpen(true)} 
+            variant="outline"
+            disabled={loading}
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Add New School
+          </Button>
+        </div>
+      ) : (
+        <DataTable columns={columns} data={filteredSchools} showSearch={false} />
+      )}
 
       {/* Modals */}
       <AddSchoolModal
@@ -311,9 +446,10 @@ export function ManageSchools() {
         onClose={() => {
           setIsModalOpen(false);
           setEditingSchool(null);
+          setError(null);
         }}
         school={editingSchool}
-        onSave={editingSchool ? handleUpdateSchool : handleAddSchool}
+        onSave={handleAddSchool}
       />
 
       <ChangePasswordModal

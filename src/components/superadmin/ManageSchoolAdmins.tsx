@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '../ui/button';
 import { Plus, Edit, Trash2, Mail, Lock, School } from 'lucide-react';
 import { AddAdminModal } from '../modals/AddAdminModal';
@@ -6,75 +6,64 @@ import { ChangePasswordModal } from '../modals/ChangePasswordModal';
 import { Badge } from '../ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Label } from '../ui/label';
+import { schoolAPI, APIError } from '../../utils/api';
 
 interface SchoolAdmin {
-  id: string;
+  _id?: string;
+  id?: string;
   name: string;
   email: string;
-  school: string;
-  phone: string;
-  status: 'active' | 'inactive';
-  joinDate: string;
+  school?: string;
+  schoolId?: any;
+  phone?: string;
+  status?: 'active' | 'inactive' | 'ACTIVE' | 'DISABLED';
+  joinDate?: string;
+  createdAt?: string;
 }
 
 export function ManageSchoolAdmins() {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const [editingAdmin, setEditingAdmin] = useState<SchoolAdmin | null>(null);
   const [selectedAdminForPassword, setSelectedAdminForPassword] = useState<SchoolAdmin | null>(null);
   const [selectedSchool, setSelectedSchool] = useState<string>('');
-  
-  // List of all registered schools
-  const schools = [
-    'Greenfield Public School',
-    'Riverside High School',
-    'Oakwood Academy',
-    'Maple Grove School',
-  ];
-  
-  const [admins, setAdmins] = useState<SchoolAdmin[]>([
-    {
-      id: '1',
-      name: 'John Doe',
-      email: 'john@greenfield.edu',
-      school: 'Greenfield Public School',
-      phone: '+1-555-0101',
-      status: 'active',
-      joinDate: '2024-01-15',
-    },
-    {
-      id: '2',
-      name: 'Michael Chen',
-      email: 'michael@riverside.edu',
-      school: 'Riverside High School',
-      phone: '+1-555-0102',
-      status: 'active',
-      joinDate: '2024-02-20',
-    },
-    {
-      id: '3',
-      name: 'Sarah Williams',
-      email: 'sarah@oakwood.edu',
-      school: 'Oakwood Academy',
-      phone: '+1-555-0103',
-      status: 'active',
-      joinDate: '2024-03-10',
-    },
-    {
-      id: '4',
-      name: 'David Brown',
-      email: 'david@maplegrove.edu',
-      school: 'Maple Grove School',
-      phone: '+1-555-0104',
-      status: 'inactive',
-      joinDate: '2023-12-05',
-    },
-  ]);
+  const [selectedSchoolId, setSelectedSchoolId] = useState<string>('');
+  const [schools, setSchools] = useState<any[]>([]);
+  const [admins, setAdmins] = useState<SchoolAdmin[]>([]);
 
-  // Filter admins by selected school
-  const filteredAdmins = selectedSchool 
-    ? admins.filter((admin) => admin.school === selectedSchool)
-    : [];
+  useEffect(() => {
+    const fetchSchools = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await schoolAPI.getSchools();
+        if (response.success && response.data) {
+          setSchools(response.data);
+        }
+      } catch (err) {
+        const apiError = err as APIError;
+        setError(apiError.message || 'Failed to load schools');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchSchools();
+  }, []);
+
+  // Note: Admin management API endpoints may not exist yet
+  // This component will show empty state until API is implemented
+  useEffect(() => {
+    if (selectedSchoolId) {
+      // TODO: Fetch admins for selected school when API is available
+      // For now, set empty array
+      setAdmins([]);
+    }
+  }, [selectedSchoolId]);
+
+  const filteredAdmins = admins;
 
   const handleEdit = (admin: SchoolAdmin) => {
     setEditingAdmin(admin);
@@ -82,11 +71,12 @@ export function ManageSchoolAdmins() {
   };
 
   const handleDelete = (adminId: string) => {
-    setAdmins(admins.filter((a) => a.id !== adminId));
+    // TODO: Wire delete API when CRUD is implemented
+    console.log('Delete admin:', adminId);
   };
 
   const handleChangePassword = (adminId: string) => {
-    const admin = admins.find((a) => a.id === adminId);
+    const admin = admins.find((a) => (a._id || a.id) === adminId);
     if (admin) {
       setSelectedAdminForPassword(admin);
       setIsPasswordModalOpen(true);
@@ -94,15 +84,39 @@ export function ManageSchoolAdmins() {
   };
 
   const handleAddAdmin = (newAdmin: SchoolAdmin) => {
-    setAdmins([...admins, { ...newAdmin, id: Date.now().toString() }]);
+    // TODO: Wire create API when CRUD is implemented
+    console.log('Add admin:', newAdmin);
     setIsModalOpen(false);
   };
 
   const handleUpdateAdmin = (updatedAdmin: SchoolAdmin) => {
-    setAdmins(admins.map((a) => (a.id === updatedAdmin.id ? updatedAdmin : a)));
+    // TODO: Wire update API when CRUD is implemented
+    console.log('Update admin:', updatedAdmin);
     setIsModalOpen(false);
     setEditingAdmin(null);
   };
+
+  if (loading && !selectedSchoolId) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-gray-900 mb-2 text-2xl font-bold">Manage School Admins</h1>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error && !selectedSchoolId) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-gray-900 mb-2 text-2xl font-bold">Manage School Admins</h1>
+          <p className="text-red-600">Error: {error}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -123,16 +137,32 @@ export function ManageSchoolAdmins() {
         <Label htmlFor="school-select" className="text-gray-700 mb-2 block">
           Select School
         </Label>
-        <Select value={selectedSchool} onValueChange={setSelectedSchool}>
+        <Select
+          value={selectedSchool}
+          onValueChange={(value) => {
+            const school = schools.find(s => s.name === value);
+            if (school) {
+              setSelectedSchool(school.name);
+              setSelectedSchoolId(school._id || school.id || '');
+            }
+          }}
+        >
           <SelectTrigger id="school-select" className="w-full max-w-md">
             <SelectValue placeholder="Select a school to view admins" />
           </SelectTrigger>
           <SelectContent>
-            {schools.map((school) => (
-              <SelectItem key={school} value={school}>
-                {school}
-              </SelectItem>
-            ))}
+            {schools.length === 0 ? (
+              <div className="px-3 py-2 text-sm text-gray-500">No schools available</div>
+            ) : (
+              schools.map((school) => {
+                const schoolId = school._id || school.id || '';
+                return (
+                  <SelectItem key={schoolId} value={school.name}>
+                    {school.name}
+                  </SelectItem>
+                );
+              })
+            )}
           </SelectContent>
         </Select>
       </div>
@@ -156,95 +186,103 @@ export function ManageSchoolAdmins() {
 
           {filteredAdmins.length > 0 ? (
             <div className="space-y-4">
-              {filteredAdmins.map((admin) => (
-                <div
-                  key={admin.id}
-                  className="border border-gray-200 rounded-lg p-6 hover:shadow-sm transition-shadow"
-                >
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Left Column */}
-                    <div className="space-y-4">
-                      <div>
-                        <Label className="text-gray-500 text-sm">Admin Name</Label>
-                        <div className="flex items-center gap-2 mt-1">
-                          <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
-                            <Mail className="w-4 h-4 text-purple-600" />
+              {filteredAdmins.map((admin) => {
+                const adminId = admin._id || admin.id || '';
+                return (
+                  <div
+                    key={adminId}
+                    className="border border-gray-200 rounded-lg p-6 hover:shadow-sm transition-shadow"
+                  >
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* Left Column */}
+                      <div className="space-y-4">
+                        <div>
+                          <Label className="text-gray-500 text-sm">Admin Name</Label>
+                          <div className="flex items-center gap-2 mt-1">
+                            <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                              <Mail className="w-4 h-4 text-purple-600" />
+                            </div>
+                            <p className="text-gray-900 font-medium">{admin.name}</p>
                           </div>
-                          <p className="text-gray-900 font-medium">{admin.name}</p>
+                        </div>
+                        <div>
+                          <Label className="text-gray-500 text-sm">Email</Label>
+                          <p className="text-gray-900 mt-1">{admin.email}</p>
+                        </div>
+                        <div>
+                          <Label className="text-gray-500 text-sm">Phone</Label>
+                          <p className="text-gray-900 mt-1">{admin.phone || 'N/A'}</p>
                         </div>
                       </div>
-                      <div>
-                        <Label className="text-gray-500 text-sm">Email</Label>
-                        <p className="text-gray-900 mt-1">{admin.email}</p>
-                      </div>
-                      <div>
-                        <Label className="text-gray-500 text-sm">Phone</Label>
-                        <p className="text-gray-900 mt-1">{admin.phone}</p>
+
+                      {/* Right Column */}
+                      <div className="space-y-4">
+                        <div>
+                          <Label className="text-gray-500 text-sm">School</Label>
+                          <p className="text-gray-900 mt-1">{admin.school || selectedSchool}</p>
+                        </div>
+                        <div>
+                          <Label className="text-gray-500 text-sm">Join Date</Label>
+                          <p className="text-gray-900 mt-1">
+                            {admin.joinDate || admin.createdAt
+                              ? new Date(admin.joinDate || admin.createdAt || '').toLocaleDateString()
+                              : 'N/A'}
+                          </p>
+                        </div>
+                        <div>
+                          <Label className="text-gray-500 text-sm">Status</Label>
+                          <div className="mt-1">
+                            <Badge variant={(admin.status || 'active').toLowerCase() === 'active' ? 'default' : 'secondary'}>
+                              {(admin.status || 'active').charAt(0).toUpperCase() + (admin.status || 'active').slice(1).toLowerCase()}
+                            </Badge>
+                          </div>
+                        </div>
                       </div>
                     </div>
 
-                    {/* Right Column */}
-                    <div className="space-y-4">
-                      <div>
-                        <Label className="text-gray-500 text-sm">School</Label>
-                        <p className="text-gray-900 mt-1">{admin.school}</p>
-                      </div>
-                      <div>
-                        <Label className="text-gray-500 text-sm">Join Date</Label>
-                        <p className="text-gray-900 mt-1">
-                          {new Date(admin.joinDate).toLocaleDateString()}
-                        </p>
-                      </div>
-                      <div>
-                        <Label className="text-gray-500 text-sm">Status</Label>
-                        <div className="mt-1">
-                          <Badge variant={admin.status === 'active' ? 'default' : 'secondary'}>
-                            {admin.status.charAt(0).toUpperCase() + admin.status.slice(1)}
-                          </Badge>
-                        </div>
-                      </div>
+                    {/* Actions */}
+                    <div className="flex items-center gap-2 mt-6 pt-4 border-t border-gray-200">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleEdit(admin)}
+                        className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                      >
+                        <Edit className="w-4 h-4 mr-2" />
+                        Edit
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleChangePassword(adminId)}
+                        className="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                      >
+                        <Lock className="w-4 h-4 mr-2" />
+                        Change Password
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDelete(adminId)}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                      >
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Delete
+                      </Button>
                     </div>
                   </div>
-
-                  {/* Actions */}
-                  <div className="flex items-center gap-2 mt-6 pt-4 border-t border-gray-200">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleEdit(admin)}
-                      className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                    >
-                      <Edit className="w-4 h-4 mr-2" />
-                      Edit
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleChangePassword(admin.id)}
-                      className="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
-                    >
-                      <Lock className="w-4 h-4 mr-2" />
-                      Change Password
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleDelete(admin.id)}
-                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                    >
-                      <Trash2 className="w-4 h-4 mr-2" />
-                      Delete
-                    </Button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <div className="text-center py-12">
               <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Mail className="w-8 h-8 text-gray-400" />
               </div>
-              <p className="text-gray-600">No admins found for this school</p>
+              <p className="text-gray-600 mb-2">No admins found for this school</p>
+              <p className="text-gray-500 text-sm mb-4">
+                Admin management API endpoints are not yet implemented.
+              </p>
               <Button
                 onClick={() => setIsModalOpen(true)}
                 variant="outline"

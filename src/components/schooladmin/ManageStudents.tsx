@@ -1,103 +1,104 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { DataTable, Column } from '../ui/DataTable';
 import { Button } from '../ui/button';
 import { Plus, Edit, Trash2, Eye, CreditCard, ImageIcon, School, GraduationCap, ChevronRight } from 'lucide-react';
 import { AddStudentModal } from '../modals/AddStudentModal';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
+import { studentAPI, classAPI, APIError } from '../../utils/api';
 
 interface Student {
-  id: string;
+  _id?: string;
+  id?: string;
   admissionNo: string;
   photo?: string;
+  photoUrl?: string;
   name: string;
-  class: string;
-  session: string;
+  class?: string;
+  classId?: any;
+  session?: string;
+  sessionId?: any;
   fatherName: string;
   mobile: string;
   dob: string;
 }
 
+interface Class {
+  _id: string;
+  className: string;
+  classId?: string;
+}
+
 export function ManageStudents() {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [selectedClass, setSelectedClass] = useState<string>('');
+  const [students, setStudents] = useState<Student[]>([]);
+  const [classes, setClasses] = useState<Class[]>([]);
 
-  // School admin's own school (in real app, this would come from user context)
-  const ownSchool = 'Greenfield Public School';
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        // Fetch classes
+        const classesResponse = await classAPI.getClasses();
+        if (classesResponse.success && classesResponse.data) {
+          setClasses(classesResponse.data);
+        }
 
-  // All students for this school
-  const allStudents: Student[] = [
-    {
-      id: '1',
-      admissionNo: 'GPS1001',
-      name: 'Emily Johnson',
-      class: 'Class 10-A',
-      school: ownSchool,
-      session: '2025-26',
-      fatherName: 'Robert Johnson',
-      mobile: '+1 234 567 8901',
-      dob: '2010-05-15',
-    },
-    {
-      id: '2',
-      admissionNo: 'GPS1002',
-      name: 'Michael Chen',
-      class: 'Class 10-A',
-      school: ownSchool,
-      session: '2025-26',
-      fatherName: 'David Chen',
-      mobile: '+1 234 567 8902',
-      dob: '2010-08-22',
-    },
-    {
-      id: '3',
-      admissionNo: 'GPS1003',
-      name: 'Sarah Williams',
-      class: 'Class 9-B',
-      school: ownSchool,
-      session: '2025-26',
-      fatherName: 'James Williams',
-      mobile: '+1 234 567 8903',
-      dob: '2011-03-10',
-    },
-    {
-      id: '4',
-      admissionNo: 'GPS1004',
-      name: 'David Brown',
-      class: 'Class 10-B',
-      school: ownSchool,
-      session: '2025-26',
-      fatherName: 'Thomas Brown',
-      mobile: '+1 234 567 8904',
-      dob: '2010-11-28',
-    },
-  ];
+        // Fetch students
+        const studentsResponse = await studentAPI.getStudents();
+        if (studentsResponse.success && studentsResponse.data) {
+          // Map backend data to frontend format
+          const mappedStudents = studentsResponse.data.map((student: any) => ({
+            _id: student._id,
+            id: student._id,
+            admissionNo: student.admissionNo,
+            photo: student.photoUrl,
+            photoUrl: student.photoUrl,
+            name: student.name,
+            class: student.classId?.className || 'N/A',
+            classId: student.classId,
+            session: student.sessionId?.sessionName || 'N/A',
+            sessionId: student.sessionId,
+            fatherName: student.fatherName || '',
+            mobile: student.mobile || '',
+            dob: student.dob ? new Date(student.dob).toISOString().split('T')[0] : '',
+          }));
+          setStudents(mappedStudents);
+        }
+      } catch (err) {
+        const apiError = err as APIError;
+        setError(apiError.message || 'Failed to load students');
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  // Get unique classes for own school
+    fetchData();
+  }, []);
+
+  // Get unique classes from students
   const getClassesForSchool = (): string[] => {
-    const classes = allStudents
-      .filter((student) => student.school === ownSchool)
-      .map((student) => student.class);
-    return Array.from(new Set(classes)).sort();
+    const uniqueClasses = new Set<string>();
+    students.forEach(student => {
+      if (student.class && student.class !== 'N/A') {
+        uniqueClasses.add(student.class);
+      }
+    });
+    return Array.from(uniqueClasses).sort();
   };
 
   // Get student count for a class
   const getStudentCountForClass = (className: string): number => {
-    return allStudents.filter(
-      (student) => student.school === ownSchool && student.class === className
-    ).length;
-  };
-
-  // Get student count for own school
-  const getStudentCountForSchool = (): number => {
-    return allStudents.filter((student) => student.school === ownSchool).length;
+    return students.filter(student => student.class === className).length;
   };
 
   // Filter students by selected class
   const filteredStudents = selectedClass
-    ? allStudents.filter(
-        (student) => student.school === ownSchool && student.class === selectedClass
-      )
+    ? students.filter(student => student.class === selectedClass)
     : [];
 
   const columns: Column<Student>[] = [
@@ -106,8 +107,8 @@ export function ManageStudents() {
       header: 'Photo',
       render: (student) => (
         <div className="w-10 h-10 bg-gray-200 rounded-lg flex items-center justify-center overflow-hidden">
-          {student.photo ? (
-            <ImageWithFallback src={student.photo} alt={student.name} className="w-full h-full object-cover" />
+          {student.photo || student.photoUrl ? (
+            <ImageWithFallback src={student.photo || student.photoUrl || ''} alt={student.name} className="w-full h-full object-cover" />
           ) : (
             <ImageIcon className="w-5 h-5 text-gray-400" />
           )}
@@ -129,7 +130,7 @@ export function ManageStudents() {
       render: (student) => (
         <div>
           <p className="text-gray-900">{student.name}</p>
-          <p className="text-gray-600">DOB: {new Date(student.dob).toLocaleDateString()}</p>
+          <p className="text-gray-600 text-sm">DOB: {student.dob ? new Date(student.dob).toLocaleDateString() : 'N/A'}</p>
         </div>
       ),
     },
@@ -151,42 +152,45 @@ export function ManageStudents() {
     {
       key: 'actions',
       header: 'Actions',
-      render: (student) => (
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            title="View"
-          >
-            <Eye className="w-4 h-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            title="Edit"
-            onClick={() => handleEdit(student)}
-          >
-            <Edit className="w-4 h-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            title="Generate ID Card"
-            className="text-blue-600"
-          >
-            <CreditCard className="w-4 h-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            title="Delete"
-            onClick={() => handleDelete(student.id)}
-            className="text-red-600 hover:text-red-700"
-          >
-            <Trash2 className="w-4 h-4" />
-          </Button>
-        </div>
-      ),
+      render: (student) => {
+        const studentId = student._id || student.id || '';
+        return (
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              title="View"
+            >
+              <Eye className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              title="Edit"
+              onClick={() => handleEdit(student)}
+            >
+              <Edit className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              title="Generate ID Card"
+              className="text-blue-600"
+            >
+              <CreditCard className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              title="Delete"
+              onClick={() => handleDelete(studentId)}
+              className="text-red-600 hover:text-red-700"
+            >
+              <Trash2 className="w-4 h-4" />
+            </Button>
+          </div>
+        );
+      },
     },
   ];
 
@@ -196,12 +200,35 @@ export function ManageStudents() {
   };
 
   const handleDelete = (studentId: string) => {
+    // TODO: Wire delete API when CRUD is implemented
     console.log('Delete student:', studentId);
   };
 
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-gray-900 mb-2 text-2xl font-bold">Manage Students</h1>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-gray-900 mb-2 text-2xl font-bold">Manage Students</h1>
+          <p className="text-red-600">Error: {error}</p>
+        </div>
+      </div>
+    );
+  }
+
   // Render Classes List
   if (!selectedClass) {
-    const classes = getClassesForSchool();
+    const classList = getClassesForSchool();
 
     return (
       <div className="space-y-6">
@@ -219,45 +246,55 @@ export function ManageStudents() {
               <School className="w-6 h-6 text-blue-600" />
             </div>
             <div>
-              <h2 className="text-gray-900 font-semibold text-lg">{ownSchool}</h2>
+              <h2 className="text-gray-900 font-semibold text-lg">School</h2>
               <p className="text-gray-600 text-sm">
-                {getStudentCountForSchool()} {getStudentCountForSchool() === 1 ? 'student' : 'students'} across {classes.length} {classes.length === 1 ? 'class' : 'classes'}
+                {students.length} {students.length === 1 ? 'student' : 'students'} across {classList.length} {classList.length === 1 ? 'class' : 'classes'}
               </p>
             </div>
           </div>
         </div>
 
         {/* Classes List */}
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          <div className="p-6 border-b border-gray-200">
-            <h2 className="text-gray-900 font-semibold text-lg">Select a Class</h2>
-            <p className="text-gray-600 text-sm mt-1">Click on a class to view its students</p>
+        {classList.length === 0 ? (
+          <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <GraduationCap className="w-8 h-8 text-gray-400" />
+            </div>
+            <p className="text-gray-600 mb-4">No classes found</p>
+            <p className="text-gray-500 text-sm">Classes will appear here once students are assigned to them.</p>
           </div>
-          <div className="divide-y divide-gray-200">
-            {classes.map((className) => (
-              <button
-                key={className}
-                onClick={() => setSelectedClass(className)}
-                className="w-full p-6 hover:bg-gray-50 transition-colors text-left"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                      <GraduationCap className="w-6 h-6 text-green-600" />
+        ) : (
+          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+            <div className="p-6 border-b border-gray-200">
+              <h2 className="text-gray-900 font-semibold text-lg">Select a Class</h2>
+              <p className="text-gray-600 text-sm mt-1">Click on a class to view its students</p>
+            </div>
+            <div className="divide-y divide-gray-200">
+              {classList.map((className) => (
+                <button
+                  key={className}
+                  onClick={() => setSelectedClass(className)}
+                  className="w-full p-6 hover:bg-gray-50 transition-colors text-left"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                        <GraduationCap className="w-6 h-6 text-green-600" />
+                      </div>
+                      <div>
+                        <p className="text-gray-900 font-medium text-lg">{className}</p>
+                        <p className="text-gray-600 text-sm mt-1">
+                          {getStudentCountForClass(className)} {getStudentCountForClass(className) === 1 ? 'student' : 'students'}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-gray-900 font-medium text-lg">{className}</p>
-                      <p className="text-gray-600 text-sm mt-1">
-                        {getStudentCountForClass(className)} {getStudentCountForClass(className) === 1 ? 'student' : 'students'}
-                      </p>
-                    </div>
+                    <ChevronRight className="w-5 h-5 text-gray-400" />
                   </div>
-                  <ChevronRight className="w-5 h-5 text-gray-400" />
-                </div>
-              </button>
-            ))}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     );
   }
@@ -270,7 +307,7 @@ export function ManageStudents() {
         <div>
           <h1 className="text-gray-900 mb-2 text-2xl font-bold">Manage Students</h1>
           <p className="text-gray-600">
-            {ownSchool} - {selectedClass}
+            {selectedClass}
           </p>
         </div>
         <Button onClick={() => setIsModalOpen(true)} className="bg-blue-600 hover:bg-blue-700">
@@ -293,7 +330,7 @@ export function ManageStudents() {
         <span className="text-gray-900 font-medium">{selectedClass}</span>
       </div>
 
-      {/* School and Class Header */}
+      {/* Class Header */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
@@ -302,7 +339,7 @@ export function ManageStudents() {
           <div>
             <h2 className="text-gray-900 font-semibold text-lg">{selectedClass}</h2>
             <p className="text-gray-600 text-sm">
-              {ownSchool} • {filteredStudents.length} {filteredStudents.length === 1 ? 'student' : 'students'}
+              {filteredStudents.length} {filteredStudents.length === 1 ? 'student' : 'students'}
             </p>
           </div>
         </div>

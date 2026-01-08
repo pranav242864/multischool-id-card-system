@@ -1,35 +1,74 @@
-import { School, Users, GraduationCap, TrendingUp, Bell, UserCircle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { School, Users, GraduationCap, Bell } from 'lucide-react';
 import { StatCard } from '../ui/StatCard';
 import { Button } from '../ui/button';
+import { schoolAPI, noticeAPI, APIError } from '../../utils/api';
 
 interface SuperadminDashboardProps {
   onNavigate: (view: string) => void;
 }
 
 export function SuperadminDashboard({ onNavigate }: SuperadminDashboardProps) {
-  const notices = [
-    {
-      id: 1,
-      title: 'System Maintenance Scheduled',
-      message: 'Server maintenance on Sunday, 2 AM - 4 AM',
-      date: '2 hours ago',
-      type: 'warning',
-    },
-    {
-      id: 2,
-      title: 'New School Onboarded',
-      message: 'Riverside High School has been successfully added',
-      date: '5 hours ago',
-      type: 'success',
-    },
-    {
-      id: 3,
-      title: 'Monthly Report Available',
-      message: 'October 2025 system-wide report is ready',
-      date: '1 day ago',
-      type: 'info',
-    },
-  ];
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [schools, setSchools] = useState<any[]>([]);
+  const [notices, setNotices] = useState<any[]>([]);
+  const [stats, setStats] = useState({
+    totalSchools: 0,
+    totalAdmins: 0,
+    totalStudents: 0,
+    totalTeachers: 0,
+  });
+
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        // Fetch schools
+        const schoolsResponse = await schoolAPI.getSchools();
+        if (schoolsResponse.success && schoolsResponse.data) {
+          setSchools(schoolsResponse.data);
+          setStats(prev => ({ ...prev, totalSchools: schoolsResponse.data.length }));
+        }
+
+        // Fetch notices (for SUPERADMIN, no schoolId needed)
+        const noticesResponse = await noticeAPI.getNotices();
+        if (noticesResponse.success && noticesResponse.data) {
+          setNotices(noticesResponse.data.slice(0, 3)); // Show latest 3
+        }
+      } catch (err) {
+        const apiError = err as APIError;
+        setError(apiError.message || 'Failed to load dashboard data');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-gray-900 mb-2">Super Admin Dashboard</h1>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-gray-900 mb-2">Super Admin Dashboard</h1>
+          <p className="text-red-600">Error: {error}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -43,25 +82,25 @@ export function SuperadminDashboard({ onNavigate }: SuperadminDashboardProps) {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
           title="Total Schools"
-          value="24"
+          value={stats.totalSchools.toString()}
           icon={School}
           color="blue"
         />
         <StatCard
           title="School Admins"
-          value="48"
+          value={stats.totalAdmins.toString()}
           icon={Users}
           color="green"
         />
         <StatCard
           title="Total Students"
-          value="12,847"
+          value={stats.totalStudents.toString()}
           icon={GraduationCap}
           color="purple"
         />
         <StatCard
           title="Total Teachers"
-          value="1,243"
+          value={stats.totalTeachers.toString()}
           icon={Users}
           color="orange"
         />
@@ -104,17 +143,6 @@ export function SuperadminDashboard({ onNavigate }: SuperadminDashboardProps) {
               <div className="text-gray-600">View and manage students</div>
             </div>
           </Button>
-          <Button
-            variant="outline"
-            className="h-auto py-4 flex flex-col items-start gap-2"
-            onClick={() => onNavigate('teachers')}
-          >
-            <UserCircle className="w-5 h-5 text-orange-600" />
-            <div className="text-left">
-              <div className="text-gray-900">Manage Teachers</div>
-              <div className="text-gray-600">View and manage teachers</div>
-            </div>
-          </Button>
         </div>
       </div>
 
@@ -127,29 +155,27 @@ export function SuperadminDashboard({ onNavigate }: SuperadminDashboardProps) {
             <Bell className="w-5 h-5 text-gray-400" />
           </div>
           <div className="space-y-4">
-            {notices.map((notice) => (
-              <div
-                key={notice.id}
-                className="p-4 rounded-lg border border-gray-200 hover:shadow-sm transition-shadow"
-              >
-                <div className="flex items-start justify-between mb-2">
-                  <h3 className="text-gray-900">{notice.title}</h3>
-                  <span
-                    className={`text-xs px-2 py-1 rounded ${
-                      notice.type === 'warning'
-                        ? 'bg-yellow-100 text-yellow-700'
-                        : notice.type === 'success'
-                        ? 'bg-green-100 text-green-700'
-                        : 'bg-blue-100 text-blue-700'
-                    }`}
-                  >
-                    {notice.type}
-                  </span>
+            {notices.length === 0 ? (
+              <p className="text-gray-500 text-sm">No notices available</p>
+            ) : (
+              notices.map((notice) => (
+                <div
+                  key={notice._id || notice.id}
+                  className="p-4 rounded-lg border border-gray-200 hover:shadow-sm transition-shadow"
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <h3 className="text-gray-900">{notice.title}</h3>
+                    <span className="text-xs px-2 py-1 rounded bg-blue-100 text-blue-700">
+                      {notice.status || 'ACTIVE'}
+                    </span>
+                  </div>
+                  <p className="text-gray-600 mb-2">{notice.description}</p>
+                  <p className="text-gray-500 text-sm">
+                    {notice.createdAt ? new Date(notice.createdAt).toLocaleDateString() : ''}
+                  </p>
                 </div>
-                <p className="text-gray-600 mb-2">{notice.message}</p>
-                <p className="text-gray-500">{notice.date}</p>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
 
@@ -157,30 +183,32 @@ export function SuperadminDashboard({ onNavigate }: SuperadminDashboardProps) {
         <div className="bg-white rounded-lg border border-gray-200 p-6">
           <h2 className="text-gray-900 mb-4">Recently Added Schools</h2>
           <div className="space-y-4">
-            {[
-              { name: 'Riverside High School', admin: 'Michael Chen', students: 850 },
-              { name: 'Oakwood Academy', admin: 'Sarah Williams', students: 640 },
-              { name: 'Maple Grove School', admin: 'David Brown', students: 520 },
-            ].map((school, index) => (
-              <div
-                key={index}
-                className="flex items-center justify-between p-4 rounded-lg border border-gray-200"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                    <School className="w-5 h-5 text-blue-600" />
+            {schools.length === 0 ? (
+              <p className="text-gray-500 text-sm">No schools available</p>
+            ) : (
+              schools.slice(0, 3).map((school) => (
+                <div
+                  key={school._id || school.id}
+                  className="flex items-center justify-between p-4 rounded-lg border border-gray-200"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                      <School className="w-5 h-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <p className="text-gray-900">{school.name}</p>
+                      <p className="text-gray-600 text-sm">
+                        {school.city || 'No city specified'}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-gray-900">{school.name}</p>
-                    <p className="text-gray-600">Admin: {school.admin}</p>
+                  <div className="text-right">
+                    <p className="text-gray-900">{school.studentCount || 0}</p>
+                    <p className="text-gray-600 text-sm">students</p>
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-gray-900">{school.students}</p>
-                  <p className="text-gray-600">students</p>
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
       </div>

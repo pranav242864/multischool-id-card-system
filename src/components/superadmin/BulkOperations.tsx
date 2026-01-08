@@ -4,7 +4,7 @@ import { Upload, Download, FileSpreadsheet, Image, CheckCircle2, XCircle, Loader
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Label } from '../ui/label';
-import { templateAPI, bulkImportAPI } from '../../utils/api';
+import { templateAPI, bulkImportAPI, schoolAPI, APIError } from '../../utils/api';
 import ExcelJS from 'exceljs';
 
 type EntityType = 'teacher' | 'student';
@@ -35,13 +35,26 @@ export function BulkOperations({ userRole }: BulkOperationsProps) {
   const [recentImports, setRecentImports] = useState<Array<{ file: string; records: number; status: 'success' | 'error'; date: string }>>([]);
   const [error, setError] = useState<string | null>(null);
 
-  // List of all registered schools
-  const schools = [
-    'Greenfield Public School',
-    'Riverside High School',
-    'Oakwood Academy',
-    'Maple Grove School',
-  ];
+  const [schools, setSchools] = useState<any[]>([]);
+  const [loadingSchools, setLoadingSchools] = useState(false);
+
+  // Fetch schools on mount
+  useEffect(() => {
+    const fetchSchools = async () => {
+      setLoadingSchools(true);
+      try {
+        const response = await schoolAPI.getSchools();
+        if (response.success && response.data) {
+          setSchools(response.data);
+        }
+      } catch (err) {
+        console.error('Failed to load schools:', err);
+      } finally {
+        setLoadingSchools(false);
+      }
+    };
+    fetchSchools();
+  }, []);
 
   // Fetch templates when school and entity type change
   useEffect(() => {
@@ -51,16 +64,15 @@ export function BulkOperations({ userRole }: BulkOperationsProps) {
       setIsLoadingTemplates(true);
       setError(null);
       try {
-        const response = await templateAPI.getTemplates(entityType);
+        const school = schools.find(s => s.name === selectedSchool);
+        const schoolId = school?._id || school?.id;
+        const typeUpper = entityType.toUpperCase() as 'STUDENT' | 'TEACHER';
+        const response = await templateAPI.getTemplates(typeUpper, schoolId);
         if (response.success && response.data) {
-          // Filter templates by selected school (assuming schoolId matches school name for now)
-          const schoolTemplates = response.data.filter((t: Template) => 
-            t.schoolId === selectedSchool || !t.schoolId
-          );
-          setTemplates(schoolTemplates);
+          setTemplates(response.data);
           // Auto-select the first template if available
-          if (schoolTemplates.length > 0 && !selectedTemplateId) {
-            setSelectedTemplateId(schoolTemplates[0]._id);
+          if (response.data.length > 0 && !selectedTemplateId) {
+            setSelectedTemplateId(response.data[0]._id);
           } else {
             setSelectedTemplateId(null);
           }
@@ -76,7 +88,7 @@ export function BulkOperations({ userRole }: BulkOperationsProps) {
     };
 
     fetchTemplates();
-  }, [selectedSchool, entityType]);
+  }, [selectedSchool, entityType, schools]);
 
   // Get entity-specific content
   const getEntityConfig = () => {
@@ -344,26 +356,43 @@ export function BulkOperations({ userRole }: BulkOperationsProps) {
             <p className="text-gray-600 text-sm mt-1">Click on a school to start bulk operations</p>
           </div>
           <div className="divide-y divide-gray-200">
-            {schools.map((school) => (
-              <button
-                key={school}
-                onClick={() => setSelectedSchool(school)}
-                className="w-full p-6 hover:bg-gray-50 transition-colors text-left"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                      <School className="w-6 h-6 text-blue-600" />
-                    </div>
-                    <div>
-                      <p className="text-gray-900 font-medium text-lg">{school}</p>
-                      <p className="text-gray-600 text-sm mt-1">Bulk import operations</p>
-                    </div>
-                  </div>
-                  <ChevronRight className="w-5 h-5 text-gray-400" />
+            {loadingSchools ? (
+              <div className="p-12 text-center">
+                <p className="text-gray-600">Loading schools...</p>
+              </div>
+            ) : schools.length === 0 ? (
+              <div className="p-12 text-center">
+                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <School className="w-8 h-8 text-gray-400" />
                 </div>
-              </button>
-            ))}
+                <p className="text-gray-600 mb-4">No schools found</p>
+                <p className="text-gray-500 text-sm">Schools will appear here once they are created.</p>
+              </div>
+            ) : (
+              schools.map((school) => {
+                const schoolId = school._id || school.id || '';
+                return (
+                  <button
+                    key={schoolId}
+                    onClick={() => setSelectedSchool(school.name)}
+                    className="w-full p-6 hover:bg-gray-50 transition-colors text-left"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                          <School className="w-6 h-6 text-blue-600" />
+                        </div>
+                        <div>
+                          <p className="text-gray-900 font-medium text-lg">{school.name}</p>
+                          <p className="text-gray-600 text-sm mt-1">{school.city || 'Bulk import operations'}</p>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-5 h-5 text-gray-400" />
+                    </div>
+                  </button>
+                );
+              })
+            )}
           </div>
         </div>
       </div>

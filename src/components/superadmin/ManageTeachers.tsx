@@ -1,123 +1,98 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { DataTable, Column } from '../ui/DataTable';
 import { Button } from '../ui/button';
 import { Plus, Edit, Trash2, UserCircle, School, ChevronRight } from 'lucide-react';
 import { Badge } from '../ui/badge';
+import { schoolAPI, teacherAPI, APIError } from '../../utils/api';
 
 interface Teacher {
-  id: string;
+  _id?: string;
+  id?: string;
   name: string;
   email: string;
   mobile: string;
-  school: string;
-  assignedClass: string;
-  subject: string;
-  status: 'active' | 'inactive';
+  school?: string;
+  schoolId?: any;
+  assignedClass?: string;
+  classId?: any;
+  subject?: string;
+  status?: 'active' | 'inactive' | 'ACTIVE' | 'DISABLED';
 }
 
 export function ManageTeachers() {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedSchool, setSelectedSchool] = useState<string>('');
+  const [selectedSchoolId, setSelectedSchoolId] = useState<string>('');
+  const [schools, setSchools] = useState<any[]>([]);
+  const [teachers, setTeachers] = useState<Teacher[]>([]);
 
-  // List of all registered schools
-  const schools = [
-    'Greenfield Public School',
-    'Riverside High School',
-    'Oakwood Academy',
-    'Maple Grove School',
-  ];
+  useEffect(() => {
+    const fetchSchools = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await schoolAPI.getSchools();
+        if (response.success && response.data) {
+          setSchools(response.data);
+        }
+      } catch (err) {
+        const apiError = err as APIError;
+        setError(apiError.message || 'Failed to load schools');
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  // All teachers with their school information
-  const allTeachers: Teacher[] = [
-    {
-      id: '1',
-      name: 'Sarah Johnson',
-      email: 'sarah.j@greenfield.edu',
-      mobile: '+1 234 567 8901',
-      school: 'Greenfield Public School',
-      assignedClass: 'Class 10-A',
-      subject: 'Mathematics',
-      status: 'active',
-    },
-    {
-      id: '2',
-      name: 'Robert Williams',
-      email: 'robert.w@greenfield.edu',
-      mobile: '+1 234 567 8902',
-      school: 'Greenfield Public School',
-      assignedClass: 'Class 9-B',
-      subject: 'English',
-      status: 'active',
-    },
-    {
-      id: '3',
-      name: 'Emily Davis',
-      email: 'emily.d@greenfield.edu',
-      mobile: '+1 234 567 8903',
-      school: 'Greenfield Public School',
-      assignedClass: 'Class 10-B',
-      subject: 'Science',
-      status: 'active',
-    },
-    {
-      id: '4',
-      name: 'Michael Chen',
-      email: 'michael.c@riverside.edu',
-      mobile: '+1 234 567 8904',
-      school: 'Riverside High School',
-      assignedClass: 'Class 11-A',
-      subject: 'Physics',
-      status: 'active',
-    },
-    {
-      id: '5',
-      name: 'Lisa Anderson',
-      email: 'lisa.a@riverside.edu',
-      mobile: '+1 234 567 8905',
-      school: 'Riverside High School',
-      assignedClass: 'Class 12-B',
-      subject: 'Chemistry',
-      status: 'active',
-    },
-    {
-      id: '6',
-      name: 'David Brown',
-      email: 'david.b@oakwood.edu',
-      mobile: '+1 234 567 8906',
-      school: 'Oakwood Academy',
-      assignedClass: 'Class 9-A',
-      subject: 'History',
-      status: 'active',
-    },
-    {
-      id: '7',
-      name: 'Jennifer Wilson',
-      email: 'jennifer.w@maplegrove.edu',
-      mobile: '+1 234 567 8907',
-      school: 'Maple Grove School',
-      assignedClass: 'Class 10-A',
-      subject: 'Biology',
-      status: 'inactive',
-    },
-  ];
+    fetchSchools();
+  }, []);
 
-  // Filter teachers by selected school
-  const filteredTeachers = selectedSchool
-    ? allTeachers.filter((teacher) => teacher.school === selectedSchool)
-    : [];
+  useEffect(() => {
+    if (selectedSchoolId) {
+      const fetchTeachers = async () => {
+        setLoading(true);
+        setError(null);
+        try {
+          const response = await teacherAPI.getTeachers({ schoolId: selectedSchoolId });
+          if (response.success && response.data) {
+            // Map backend data to frontend format
+            const mappedTeachers = response.data.map((teacher: any) => ({
+              _id: teacher._id,
+              id: teacher._id,
+              name: teacher.name,
+              email: teacher.email || '',
+              mobile: teacher.mobile || '',
+              school: teacher.schoolId?.name || 'N/A',
+              schoolId: teacher.schoolId,
+              assignedClass: teacher.classId?.className || 'N/A',
+              classId: teacher.classId,
+              subject: 'N/A', // Not available in backend
+              status: (teacher.status || 'ACTIVE').toLowerCase() as 'active' | 'inactive',
+            }));
+            setTeachers(mappedTeachers);
+          }
+        } catch (err) {
+          const apiError = err as APIError;
+          setError(apiError.message || 'Failed to load teachers');
+        } finally {
+          setLoading(false);
+        }
+      };
 
-  // Get teacher count per school
-  const getTeacherCount = (schoolName: string) => {
-    return allTeachers.filter((teacher) => teacher.school === schoolName).length;
-  };
+      fetchTeachers();
+    }
+  }, [selectedSchoolId]);
+
+  const filteredTeachers = teachers;
 
   const handleEdit = (teacher: Teacher) => {
-    // Handle edit logic
+    // TODO: Wire edit API when CRUD is implemented
     setIsModalOpen(true);
   };
 
   const handleDelete = (teacherId: string) => {
-    // Handle delete logic
+    // TODO: Wire delete API when CRUD is implemented
     console.log('Delete teacher:', teacherId);
   };
 
@@ -148,50 +123,78 @@ export function ManageTeachers() {
       key: 'subject',
       header: 'Subject',
       sortable: true,
-      render: (teacher) => <span className="text-gray-700">{teacher.subject}</span>,
+      render: (teacher) => <span className="text-gray-700">{teacher.subject || 'N/A'}</span>,
     },
     {
       key: 'assignedClass',
       header: 'Assigned Class',
       sortable: true,
       render: (teacher) => (
-        <Badge variant="outline">{teacher.assignedClass}</Badge>
+        <Badge variant="outline">{teacher.assignedClass || 'N/A'}</Badge>
       ),
     },
     {
       key: 'status',
       header: 'Status',
-      render: (teacher) => (
-        <Badge variant={teacher.status === 'active' ? 'default' : 'secondary'}>
-          {teacher.status.charAt(0).toUpperCase() + teacher.status.slice(1)}
-        </Badge>
-      ),
+      render: (teacher) => {
+        const status = (teacher.status || 'active').toLowerCase();
+        return (
+          <Badge variant={status === 'active' ? 'default' : 'secondary'}>
+            {status.charAt(0).toUpperCase() + status.slice(1)}
+          </Badge>
+        );
+      },
     },
     {
       key: 'actions',
       header: 'Actions',
-      render: (teacher) => (
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => handleEdit(teacher)}
-            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-          >
-            <Edit className="w-4 h-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => handleDelete(teacher.id)}
-            className="text-red-600 hover:text-red-700 hover:bg-red-50"
-          >
-            <Trash2 className="w-4 h-4" />
-          </Button>
-        </div>
-      ),
+      render: (teacher) => {
+        const teacherId = teacher._id || teacher.id || '';
+        return (
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => handleEdit(teacher)}
+              className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+            >
+              <Edit className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => handleDelete(teacherId)}
+              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+            >
+              <Trash2 className="w-4 h-4" />
+            </Button>
+          </div>
+        );
+      },
     },
   ];
+
+  if (loading && !selectedSchoolId) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-gray-900 mb-2 text-2xl font-bold">Manage Teachers</h1>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error && !selectedSchoolId) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-gray-900 mb-2 text-2xl font-bold">Manage Teachers</h1>
+          <p className="text-red-600">Error: {error}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -221,28 +224,44 @@ export function ManageTeachers() {
             <p className="text-gray-600 text-sm mt-1">Click on a school to view its teachers</p>
           </div>
           <div className="divide-y divide-gray-200">
-            {schools.map((school) => (
-              <button
-                key={school}
-                onClick={() => setSelectedSchool(school)}
-                className="w-full p-6 hover:bg-gray-50 transition-colors text-left"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                      <School className="w-6 h-6 text-blue-600" />
-                    </div>
-                    <div>
-                      <p className="text-gray-900 font-medium text-lg">{school}</p>
-                      <p className="text-gray-600 text-sm mt-1">
-                        {getTeacherCount(school)} {getTeacherCount(school) === 1 ? 'teacher' : 'teachers'}
-                      </p>
-                    </div>
-                  </div>
-                  <ChevronRight className="w-5 h-5 text-gray-400" />
+            {schools.length === 0 ? (
+              <div className="p-12 text-center">
+                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <School className="w-8 h-8 text-gray-400" />
                 </div>
-              </button>
-            ))}
+                <p className="text-gray-600 mb-4">No schools found</p>
+                <p className="text-gray-500 text-sm">Schools will appear here once they are created.</p>
+              </div>
+            ) : (
+              schools.map((school) => {
+                const schoolId = school._id || school.id || '';
+                return (
+                  <button
+                    key={schoolId}
+                    onClick={() => {
+                      setSelectedSchool(school.name);
+                      setSelectedSchoolId(schoolId);
+                    }}
+                    className="w-full p-6 hover:bg-gray-50 transition-colors text-left"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                          <School className="w-6 h-6 text-blue-600" />
+                        </div>
+                        <div>
+                          <p className="text-gray-900 font-medium text-lg">{school.name}</p>
+                          <p className="text-gray-600 text-sm mt-1">
+                            {school.city || 'No city specified'}
+                          </p>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-5 h-5 text-gray-400" />
+                    </div>
+                  </button>
+                );
+              })
+            )}
           </div>
         </div>
       ) : (
@@ -251,7 +270,11 @@ export function ManageTeachers() {
           {/* Back Button */}
           <Button
             variant="outline"
-            onClick={() => setSelectedSchool('')}
+            onClick={() => {
+              setSelectedSchool('');
+              setSelectedSchoolId('');
+              setTeachers([]);
+            }}
             className="mb-4"
           >
             ← Back to Schools
@@ -266,14 +289,22 @@ export function ManageTeachers() {
               <div>
                 <h2 className="text-gray-900 font-semibold text-lg">{selectedSchool}</h2>
                 <p className="text-gray-600 text-sm">
-                  {filteredTeachers.length} {filteredTeachers.length === 1 ? 'teacher' : 'teachers'}
+                  {loading ? 'Loading...' : `${filteredTeachers.length} ${filteredTeachers.length === 1 ? 'teacher' : 'teachers'}`}
                 </p>
               </div>
             </div>
           </div>
 
           {/* Teachers Table */}
-          {filteredTeachers.length > 0 ? (
+          {loading ? (
+            <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+              <p className="text-gray-600">Loading teachers...</p>
+            </div>
+          ) : error ? (
+            <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+              <p className="text-red-600">Error: {error}</p>
+            </div>
+          ) : filteredTeachers.length > 0 ? (
             <div className="bg-white rounded-lg border border-gray-200">
               <DataTable
                 columns={columns}
@@ -298,4 +329,3 @@ export function ManageTeachers() {
     </div>
   );
 }
-

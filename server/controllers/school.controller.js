@@ -44,11 +44,12 @@ const createSchoolController = asyncHandler(async (req, res, next) => {
  * @access Private - Superadmin only
  */
 const getAllSchools = asyncHandler(async (req, res, next) => {
-  // Only Superadmin can view all schools
+  // Role check is enforced by requireRole middleware in routes
+  // This additional check provides defense-in-depth
   if (!isSuperadmin(req.user)) {
     return res.status(403).json({
       success: false,
-      message: 'Only Superadmin can view all schools'
+      message: 'Access denied: Only Superadmin can view all schools'
     });
   }
 
@@ -73,11 +74,12 @@ const getAllSchools = asyncHandler(async (req, res, next) => {
  * @access Private - Superadmin only
  */
 const getSchool = asyncHandler(async (req, res, next) => {
-  // Only Superadmin can view individual schools
+  // Role check is enforced by requireRole middleware in routes
+  // This additional check provides defense-in-depth
   if (!isSuperadmin(req.user)) {
     return res.status(403).json({
       success: false,
-      message: 'Only Superadmin can view school details'
+      message: 'Access denied: Only Superadmin can view school details'
     });
   }
 
@@ -122,11 +124,12 @@ const getSchool = asyncHandler(async (req, res, next) => {
  * @access Private - Superadmin only
  */
 const deleteSchoolController = asyncHandler(async (req, res, next) => {
-  // Only Superadmin can delete schools
+  // Role check is enforced by requireRole middleware in routes
+  // This additional check provides defense-in-depth
   if (!isSuperadmin(req.user)) {
     return res.status(403).json({
       success: false,
-      message: 'Only Superadmin can delete schools'
+      message: 'Access denied: Only Superadmin can delete schools'
     });
   }
 

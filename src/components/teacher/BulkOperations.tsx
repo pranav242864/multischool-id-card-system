@@ -25,9 +25,7 @@ export function BulkOperations() {
   const [recentImports, setRecentImports] = useState<Array<{ file: string; records: number; status: 'success' | 'error'; date: string }>>([]);
   const [error, setError] = useState<string | null>(null);
 
-  // Teacher's assigned class
-  const assignedClass = 'Class 10-A';
-  const ownSchool = 'Greenfield Public School';
+  const [assignedClass, setAssignedClass] = useState<string>('');
 
   // Fetch templates for students
   useEffect(() => {
@@ -35,12 +33,9 @@ export function BulkOperations() {
       setIsLoadingTemplates(true);
       setError(null);
       try {
-        const response = await templateAPI.getTemplates('student');
+        const response = await templateAPI.getTemplates('STUDENT');
         if (response.success && response.data) {
-          const schoolTemplates = response.data.filter((t: Template) => 
-            t.schoolId === ownSchool || !t.schoolId
-          );
-          setTemplates(schoolTemplates);
+          setTemplates(response.data);
           if (schoolTemplates.length > 0 && !selectedTemplateId) {
             setSelectedTemplateId(schoolTemplates[0]._id);
           } else {
@@ -174,7 +169,8 @@ export function BulkOperations() {
       const templateName = template?.name 
         ? template.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()
         : 'student_template';
-      const filename = `${assignedClass.replace(/[^a-z0-9]/gi, '_')}_${templateName}_${timestamp}.xlsx`;
+      const classPrefix = assignedClass ? `${assignedClass.replace(/[^a-z0-9]/gi, '_')}_` : '';
+      const filename = `${classPrefix}${templateName}_${timestamp}.xlsx`;
       
       // Generate buffer and download
       const buffer = await workbook.xlsx.writeBuffer();
@@ -252,7 +248,7 @@ export function BulkOperations() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-gray-900 mb-2 text-2xl font-bold">Bulk Operations</h1>
-          <p className="text-gray-600">{assignedClass}</p>
+          <p className="text-gray-600">{assignedClass || 'My Class'}</p>
         </div>
       </div>
 
@@ -263,7 +259,7 @@ export function BulkOperations() {
             <GraduationCap className="w-6 h-6 text-blue-600" />
           </div>
           <div>
-            <h2 className="text-gray-900 font-semibold text-lg">{assignedClass}</h2>
+            <h2 className="text-gray-900 font-semibold text-lg">{assignedClass || 'My Class'}</h2>
             <p className="text-gray-600 text-sm">
               Import student data and photos in bulk
             </p>

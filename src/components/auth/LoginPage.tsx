@@ -3,8 +3,7 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { GraduationCap, Mail, Lock } from 'lucide-react';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api/v1';
+import { authAPI, APIError } from '../../utils/api';
 
 interface LoginPageProps {
   onLogin: (email: string, role: 'superadmin' | 'schooladmin' | 'teacher') => void;
@@ -22,29 +21,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
     setLoading(true);
 
     try {
-      // Call the real backend API
-      const response = await fetch(`${API_BASE_URL}/auth/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        // Login failed
-        setError(data.message || 'Invalid credentials. Please try again.');
-        setLoading(false);
-        return;
-      }
-
-      // Login successful
-      // Store token in localStorage
-      if (data.token) {
-        localStorage.setItem('authToken', data.token);
-      }
+      const data = await authAPI.login(email, password);
 
       // Extract role from response and convert to lowercase for onLogin callback
       const role = data.user?.role?.toLowerCase() || 'teacher';
@@ -57,8 +34,9 @@ export function LoginPage({ onLogin }: LoginPageProps) {
       // Call onLogin with actual user data
       onLogin(data.user.email, roleMap[role] || 'teacher');
     } catch (err) {
-      console.error('Login error:', err);
-      setError('Network error. Please check your connection and try again.');
+      const error = err as APIError;
+      setError(error.message || 'Network error. Please check your connection and try again.');
+    } finally {
       setLoading(false);
     }
   };
@@ -68,30 +46,9 @@ export function LoginPage({ onLogin }: LoginPageProps) {
     setLoading(true);
     
     try {
-      // Call Google OAuth endpoint
-      const response = await fetch(`${API_BASE_URL}/auth/google`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          email: 'demo@school.com',
-          idToken: '', // Google OAuth token would go here
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        setError(data.message || 'Google sign-in failed. Please try again.');
-        setLoading(false);
-        return;
-      }
-
-      // Store token
-      if (data.token) {
-        localStorage.setItem('authToken', data.token);
-      }
+      // Note: In a real implementation, you would get idToken from Google OAuth
+      // For now, using placeholder values
+      const data = await authAPI.googleLogin('', 'demo@school.com', 'Demo User');
 
       const role = data.user?.role?.toLowerCase() || 'schooladmin';
       const roleMap: Record<string, 'superadmin' | 'schooladmin' | 'teacher'> = {
@@ -102,8 +59,9 @@ export function LoginPage({ onLogin }: LoginPageProps) {
 
       onLogin(data.user.email, roleMap[role] || 'schooladmin');
     } catch (err) {
-      console.error('Google sign-in error:', err);
-      setError('Google sign-in failed. Please try again.');
+      const error = err as APIError;
+      setError(error.message || 'Google sign-in failed. Please try again.');
+    } finally {
       setLoading(false);
     }
   };

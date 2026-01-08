@@ -1,57 +1,59 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { DataTable, Column } from '../ui/DataTable';
 import { Button } from '../ui/button';
 import { Plus, Edit, Trash2, UserCircle, School } from 'lucide-react';
 import { Badge } from '../ui/badge';
+import { teacherAPI, APIError } from '../../utils/api';
 
 interface Teacher {
-  id: string;
+  _id?: string;
+  id?: string;
   name: string;
   email: string;
   mobile: string;
-  assignedClass: string;
-  subject: string;
-  status: 'active' | 'inactive';
+  assignedClass?: string;
+  classId?: any;
+  subject?: string;
+  status?: 'active' | 'inactive' | 'ACTIVE' | 'DISABLED';
 }
 
 export function ManageTeachers() {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  
-  // School admin's own school (in real app, this would come from user context)
-  const ownSchool = 'Greenfield Public School';
+  const [teachers, setTeachers] = useState<Teacher[]>([]);
 
-  // All teachers for this school
-  const allTeachers: Teacher[] = [
-    {
-      id: '1',
-      name: 'Sarah Johnson',
-      email: 'sarah.j@greenfield.edu',
-      mobile: '+1 234 567 8901',
-      assignedClass: 'Class 10-A',
-      subject: 'Mathematics',
-      status: 'active',
-    },
-    {
-      id: '2',
-      name: 'Robert Williams',
-      email: 'robert.w@greenfield.edu',
-      mobile: '+1 234 567 8902',
-      assignedClass: 'Class 9-B',
-      subject: 'English',
-      status: 'active',
-    },
-    {
-      id: '3',
-      name: 'Emily Davis',
-      email: 'emily.d@greenfield.edu',
-      mobile: '+1 234 567 8903',
-      assignedClass: 'Class 10-B',
-      subject: 'Science',
-      status: 'active',
-    },
-  ];
-  
-  const teachers = allTeachers;
+  useEffect(() => {
+    const fetchTeachers = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await teacherAPI.getTeachers();
+        if (response.success && response.data) {
+          // Map backend data to frontend format
+          const mappedTeachers = response.data.map((teacher: any) => ({
+            _id: teacher._id,
+            id: teacher._id,
+            name: teacher.name,
+            email: teacher.email || '',
+            mobile: teacher.mobile || '',
+            assignedClass: teacher.classId?.className || 'N/A',
+            classId: teacher.classId,
+            subject: 'N/A', // Not available in backend
+            status: (teacher.status || 'ACTIVE').toLowerCase() as 'active' | 'inactive',
+          }));
+          setTeachers(mappedTeachers);
+        }
+      } catch (err) {
+        const apiError = err as APIError;
+        setError(apiError.message || 'Failed to load teachers');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTeachers();
+  }, []);
 
   const columns: Column<Teacher>[] = [
     {
@@ -65,7 +67,7 @@ export function ManageTeachers() {
           </div>
           <div>
             <p className="text-gray-900">{teacher.name}</p>
-            <p className="text-gray-600">{teacher.email}</p>
+            <p className="text-gray-600 text-sm">{teacher.email}</p>
           </div>
         </div>
       ),
@@ -79,47 +81,76 @@ export function ManageTeachers() {
       key: 'subject',
       header: 'Subject',
       sortable: true,
+      render: (teacher) => <span className="text-gray-700">{teacher.subject || 'N/A'}</span>,
     },
     {
       key: 'assignedClass',
       header: 'Assigned Class',
       sortable: true,
       render: (teacher) => (
-        <Badge variant="outline">{teacher.assignedClass}</Badge>
+        <Badge variant="outline">{teacher.assignedClass || 'N/A'}</Badge>
       ),
     },
     {
       key: 'status',
       header: 'Status',
-      render: (teacher) => (
-        <Badge variant={teacher.status === 'active' ? 'default' : 'secondary'}>
-          {teacher.status}
-        </Badge>
-      ),
+      render: (teacher) => {
+        const status = (teacher.status || 'active').toLowerCase();
+        return (
+          <Badge variant={status === 'active' ? 'default' : 'secondary'}>
+            {status.charAt(0).toUpperCase() + status.slice(1)}
+          </Badge>
+        );
+      },
     },
     {
       key: 'actions',
       header: 'Actions',
-      render: () => (
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setIsModalOpen(true)}
-          >
-            <Edit className="w-4 h-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-red-600 hover:text-red-700"
-          >
-            <Trash2 className="w-4 h-4" />
-          </Button>
-        </div>
-      ),
+      render: (teacher) => {
+        const teacherId = teacher._id || teacher.id || '';
+        return (
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsModalOpen(true)}
+            >
+              <Edit className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-red-600 hover:text-red-700"
+            >
+              <Trash2 className="w-4 h-4" />
+            </Button>
+          </div>
+        );
+      },
     },
   ];
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-gray-900 mb-2 text-2xl font-bold">Manage Teachers</h1>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-gray-900 mb-2 text-2xl font-bold">Manage Teachers</h1>
+          <p className="text-red-600">Error: {error}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -127,7 +158,7 @@ export function ManageTeachers() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-gray-900 mb-2 text-2xl font-bold">Manage Teachers</h1>
-          <p className="text-gray-600">{ownSchool}</p>
+          <p className="text-gray-600">Manage teachers for your school</p>
         </div>
         <Button onClick={() => setIsModalOpen(true)} className="bg-blue-600 hover:bg-blue-700">
           <Plus className="w-4 h-4 mr-2" />
@@ -142,7 +173,7 @@ export function ManageTeachers() {
             <School className="w-6 h-6 text-blue-600" />
           </div>
           <div>
-            <h2 className="text-gray-900 font-semibold text-lg">{ownSchool}</h2>
+            <h2 className="text-gray-900 font-semibold text-lg">School</h2>
             <p className="text-gray-600 text-sm">
               {teachers.length} {teachers.length === 1 ? 'teacher' : 'teachers'}
             </p>

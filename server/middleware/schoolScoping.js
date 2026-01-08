@@ -18,9 +18,22 @@ const schoolScoping = (req, res, next) => {
     });
   }
 
-  // If role === SUPERADMIN → require req.query.schoolId
+  // If role === SUPERADMIN → require req.query.schoolId (except for school management routes)
   if (req.user.role === 'SUPERADMIN' || req.user.role === 'Superadmin') {
-    // Require schoolId query parameter
+    // Check if this is a school management route (GET/POST /schools without :id)
+    // Path can be '/schools' (router context) or '/api/v1/schools' (full path)
+    // Exclude routes with IDs like '/schools/:id' which would be '/schools/69578dbc...'
+    const pathMatch = req.path.match(/^\/schools$/);
+    const isSchoolManagementRoute = pathMatch !== null || req.path === '/api/v1/schools';
+    
+    // For school management routes, allow SUPERADMIN to proceed without schoolId
+    if (isSchoolManagementRoute) {
+      // Don't set req.schoolId or req.schoolFilter for school management routes
+      // Controllers handle school operations directly
+      return next();
+    }
+    
+    // For all other routes, require schoolId query parameter
     if (!req.query || !req.query.schoolId) {
       return res.status(400).json({
         success: false,

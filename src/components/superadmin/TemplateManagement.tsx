@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -6,121 +6,96 @@ import { Plus, Edit, Trash2, Eye, Upload, School, FileText, ChevronRight, UserCi
 import { Checkbox } from '../ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Badge } from '../ui/badge';
+import { schoolAPI, templateAPI, APIError } from '../../utils/api';
 
-type TemplateType = 'student' | 'teacher';
+type TemplateType = 'student' | 'teacher' | 'STUDENT' | 'TEACHER';
 
 interface Template {
-  id: string;
+  _id?: string;
+  id?: string;
   name: string;
   type: TemplateType;
-  school: string;
-  createdAt: string;
-  lastModified: string;
-  status: 'active' | 'draft';
+  school?: string;
+  schoolId?: any;
+  createdAt?: string;
+  updatedAt?: string;
+  lastModified?: string;
+  isActive?: boolean;
+  status?: 'active' | 'draft' | 'ACTIVE' | 'DRAFT';
 }
 
 export function TemplateManagement() {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [showEditor, setShowEditor] = useState(false);
   const [selectedSchool, setSelectedSchool] = useState<string>('');
+  const [selectedSchoolId, setSelectedSchoolId] = useState<string>('');
   const [templateType, setTemplateType] = useState<TemplateType>('student');
+  const [schools, setSchools] = useState<any[]>([]);
+  const [templates, setTemplates] = useState<Template[]>([]);
 
-  // List of all registered schools
-  const schools = [
-    'Greenfield Public School',
-    'Riverside High School',
-    'Oakwood Academy',
-    'Maple Grove School',
-  ];
+  useEffect(() => {
+    const fetchSchools = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await schoolAPI.getSchools();
+        if (response.success && response.data) {
+          setSchools(response.data);
+        }
+      } catch (err) {
+        const apiError = err as APIError;
+        setError(apiError.message || 'Failed to load schools');
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  // All templates with school information
-  const allTemplates: Template[] = [
-    {
-      id: '1',
-      name: 'Student Card 2025',
-      type: 'student',
-      school: 'Greenfield Public School',
-      createdAt: '2025-01-15',
-      lastModified: '2025-01-20',
-      status: 'active',
-    },
-    {
-      id: '2',
-      name: 'Teacher ID Card',
-      type: 'teacher',
-      school: 'Greenfield Public School',
-      createdAt: '2025-02-01',
-      lastModified: '2025-02-10',
-      status: 'active',
-    },
-    {
-      id: '3',
-      name: 'Student Card 2025',
-      type: 'student',
-      school: 'Riverside High School',
-      createdAt: '2025-01-15',
-      lastModified: '2025-01-20',
-      status: 'active',
-    },
-    {
-      id: '4',
-      name: 'Teacher ID Card',
-      type: 'teacher',
-      school: 'Riverside High School',
-      createdAt: '2025-02-01',
-      lastModified: '2025-02-10',
-      status: 'active',
-    },
-    {
-      id: '5',
-      name: 'Student Card 2025',
-      type: 'student',
-      school: 'Oakwood Academy',
-      createdAt: '2025-01-15',
-      lastModified: '2025-01-20',
-      status: 'active',
-    },
-    {
-      id: '6',
-      name: 'Teacher ID Card',
-      type: 'teacher',
-      school: 'Oakwood Academy',
-      createdAt: '2025-02-01',
-      lastModified: '2025-02-10',
-      status: 'draft',
-    },
-    {
-      id: '7',
-      name: 'Student Card 2025',
-      type: 'student',
-      school: 'Maple Grove School',
-      createdAt: '2025-01-15',
-      lastModified: '2025-01-20',
-      status: 'active',
-    },
-    {
-      id: '8',
-      name: 'Teacher ID Card',
-      type: 'teacher',
-      school: 'Maple Grove School',
-      createdAt: '2025-02-01',
-      lastModified: '2025-02-10',
-      status: 'active',
-    },
-  ];
+    fetchSchools();
+  }, []);
 
-  // Filter templates by selected school
-  const filteredTemplates = selectedSchool
-    ? allTemplates.filter((template) => template.school === selectedSchool)
-    : [];
+  useEffect(() => {
+    if (selectedSchoolId) {
+      const fetchTemplates = async () => {
+        setLoading(true);
+        setError(null);
+        try {
+          const typeUpper = templateType.toUpperCase() as 'STUDENT' | 'TEACHER';
+          const response = await templateAPI.getTemplates(typeUpper, selectedSchoolId);
+          if (response.success && response.data) {
+            // Map backend data to frontend format
+            const mappedTemplates = response.data.map((template: any) => ({
+              _id: template._id,
+              id: template._id,
+              name: template.name || 'Unnamed Template',
+              type: template.type?.toLowerCase() as TemplateType,
+              school: template.schoolId?.name || 'N/A',
+              schoolId: template.schoolId,
+              createdAt: template.createdAt,
+              updatedAt: template.updatedAt,
+              lastModified: template.updatedAt || template.createdAt,
+              isActive: template.isActive,
+              status: template.isActive ? 'active' : 'draft',
+            }));
+            setTemplates(mappedTemplates);
+          }
+        } catch (err) {
+          const apiError = err as APIError;
+          setError(apiError.message || 'Failed to load templates');
+        } finally {
+          setLoading(false);
+        }
+      };
 
-  // Get template count for a school
-  const getTemplateCountForSchool = (schoolName: string): number => {
-    return allTemplates.filter((template) => template.school === schoolName).length;
-  };
+      fetchTemplates();
+    }
+  }, [selectedSchoolId, templateType]);
+
+  const filteredTemplates = templates;
 
   // Get default fields based on template type
   const getDefaultFields = (type: TemplateType) => {
-    switch (type) {
+    switch (type.toLowerCase()) {
       case 'teacher':
         return {
           name: true,
@@ -152,7 +127,6 @@ export function TemplateManagement() {
     fields: getDefaultFields(templateType),
   });
 
-  // Update fields when template type changes
   const handleTemplateTypeChange = (type: TemplateType) => {
     setTemplateType(type);
     setTemplateData({
@@ -162,6 +136,7 @@ export function TemplateManagement() {
   };
 
   const handleSaveTemplate = () => {
+    // TODO: Wire create/update API when CRUD is implemented
     console.log('Template data:', templateData);
     setShowEditor(false);
   };
@@ -174,6 +149,28 @@ export function TemplateManagement() {
     });
     setShowEditor(true);
   };
+
+  if (loading && !selectedSchoolId) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-gray-900 mb-2 text-2xl font-bold">ID Card Templates</h1>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error && !selectedSchoolId) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-gray-900 mb-2 text-2xl font-bold">ID Card Templates</h1>
+          <p className="text-red-600">Error: {error}</p>
+        </div>
+      </div>
+    );
+  }
 
   // Render Schools List
   if (!selectedSchool) {
@@ -192,28 +189,44 @@ export function TemplateManagement() {
             <p className="text-gray-600 text-sm mt-1">Click on a school to view its templates</p>
           </div>
           <div className="divide-y divide-gray-200">
-            {schools.map((school) => (
-              <button
-                key={school}
-                onClick={() => setSelectedSchool(school)}
-                className="w-full p-6 hover:bg-gray-50 transition-colors text-left"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                      <School className="w-6 h-6 text-blue-600" />
-                    </div>
-                    <div>
-                      <p className="text-gray-900 font-medium text-lg">{school}</p>
-                      <p className="text-gray-600 text-sm mt-1">
-                        {getTemplateCountForSchool(school)} {getTemplateCountForSchool(school) === 1 ? 'template' : 'templates'}
-                      </p>
-                    </div>
-                  </div>
-                  <ChevronRight className="w-5 h-5 text-gray-400" />
+            {schools.length === 0 ? (
+              <div className="p-12 text-center">
+                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <School className="w-8 h-8 text-gray-400" />
                 </div>
-              </button>
-            ))}
+                <p className="text-gray-600 mb-4">No schools found</p>
+                <p className="text-gray-500 text-sm">Schools will appear here once they are created.</p>
+              </div>
+            ) : (
+              schools.map((school) => {
+                const schoolId = school._id || school.id || '';
+                return (
+                  <button
+                    key={schoolId}
+                    onClick={() => {
+                      setSelectedSchool(school.name);
+                      setSelectedSchoolId(schoolId);
+                    }}
+                    className="w-full p-6 hover:bg-gray-50 transition-colors text-left"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                          <School className="w-6 h-6 text-blue-600" />
+                        </div>
+                        <div>
+                          <p className="text-gray-900 font-medium text-lg">{school.name}</p>
+                          <p className="text-gray-600 text-sm mt-1">
+                            {school.city || 'No city specified'}
+                          </p>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-5 h-5 text-gray-400" />
+                    </div>
+                  </button>
+                );
+              })
+            )}
           </div>
         </div>
       </div>
@@ -252,7 +265,11 @@ export function TemplateManagement() {
       {/* Back Button */}
       <Button
         variant="outline"
-        onClick={() => setSelectedSchool('')}
+        onClick={() => {
+          setSelectedSchool('');
+          setSelectedSchoolId('');
+          setTemplates([]);
+        }}
         className="mb-4"
       >
         ← Back to Schools
@@ -267,7 +284,7 @@ export function TemplateManagement() {
           <div>
             <h2 className="text-gray-900 font-semibold text-lg">{selectedSchool}</h2>
             <p className="text-gray-600 text-sm">
-              {filteredTemplates.length} {filteredTemplates.length === 1 ? 'template' : 'templates'}
+              {loading ? 'Loading...' : `${filteredTemplates.length} ${filteredTemplates.length === 1 ? 'template' : 'templates'}`}
             </p>
           </div>
         </div>
@@ -383,7 +400,26 @@ export function TemplateManagement() {
       ) : (
         /* Template List */
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          {filteredTemplates.length > 0 ? (
+          {loading ? (
+            <div className="p-12 text-center">
+              <p className="text-gray-600">Loading templates...</p>
+            </div>
+          ) : error ? (
+            <div className="p-12 text-center">
+              <p className="text-red-600">Error: {error}</p>
+            </div>
+          ) : filteredTemplates.length === 0 ? (
+            <div className="p-12 text-center">
+              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <FileText className="w-8 h-8 text-gray-400" />
+              </div>
+              <p className="text-gray-600 mb-4">No templates found for this school</p>
+              <Button onClick={handleCreateNew} variant="outline">
+                <Plus className="w-4 h-4 mr-2" />
+                Create Template for {selectedSchool}
+              </Button>
+            </div>
+          ) : (
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-gray-50 border-b border-gray-200">
@@ -397,86 +433,80 @@ export function TemplateManagement() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {filteredTemplates.map((template) => (
-                    <tr key={template.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          {template.type === 'teacher' ? (
-                            <UserCircle className="w-5 h-5 text-purple-600" />
-                          ) : (
-                            <GraduationCap className="w-5 h-5 text-green-600" />
-                          )}
-                          <p className="text-gray-900">{template.name}</p>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <Badge variant={template.type === 'teacher' ? 'default' : 'secondary'}>
-                          {template.type.charAt(0).toUpperCase() + template.type.slice(1)}
-                        </Badge>
-                      </td>
-                      <td className="px-6 py-4 text-gray-600">
-                        {new Date(template.createdAt).toLocaleDateString()}
-                      </td>
-                      <td className="px-6 py-4 text-gray-600">
-                        {new Date(template.lastModified).toLocaleDateString()}
-                      </td>
-                      <td className="px-6 py-4">
-                        <span
-                          className={`inline-flex items-center px-2.5 py-0.5 rounded text-xs ${
-                            template.status === 'active'
-                              ? 'bg-green-100 text-green-700'
-                              : 'bg-gray-100 text-gray-700'
-                          }`}
-                        >
-                          {template.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          <Button variant="ghost" size="sm" title="Preview">
-                            <Eye className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            title="Edit"
-                            onClick={() => {
-                              setTemplateType(template.type);
-                              setTemplateData({
-                                name: template.name,
-                                backgroundImage: null,
-                                fields: getDefaultFields(template.type),
-                              });
-                              setShowEditor(true);
-                            }}
+                  {filteredTemplates.map((template) => {
+                    const templateId = template._id || template.id || '';
+                    return (
+                      <tr key={templateId} className="hover:bg-gray-50">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            {template.type?.toLowerCase() === 'teacher' ? (
+                              <UserCircle className="w-5 h-5 text-purple-600" />
+                            ) : (
+                              <GraduationCap className="w-5 h-5 text-green-600" />
+                            )}
+                            <p className="text-gray-900">{template.name}</p>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <Badge variant={template.type?.toLowerCase() === 'teacher' ? 'default' : 'secondary'}>
+                            {template.type?.charAt(0).toUpperCase() + template.type?.slice(1).toLowerCase()}
+                          </Badge>
+                        </td>
+                        <td className="px-6 py-4 text-gray-600">
+                          {template.createdAt ? new Date(template.createdAt).toLocaleDateString() : 'N/A'}
+                        </td>
+                        <td className="px-6 py-4 text-gray-600">
+                          {template.lastModified || template.updatedAt
+                            ? new Date(template.lastModified || template.updatedAt || '').toLocaleDateString()
+                            : 'N/A'}
+                        </td>
+                        <td className="px-6 py-4">
+                          <span
+                            className={`inline-flex items-center px-2.5 py-0.5 rounded text-xs ${
+                              (template.status === 'active' || template.isActive)
+                                ? 'bg-green-100 text-green-700'
+                                : 'bg-gray-100 text-gray-700'
+                            }`}
                           >
-                            <Edit className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            title="Delete"
-                            className="text-red-600 hover:text-red-700"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                            {(template.status === 'active' || template.isActive) ? 'active' : 'draft'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2">
+                            <Button variant="ghost" size="sm" title="Preview">
+                              <Eye className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              title="Edit"
+                              onClick={() => {
+                                setTemplateType(template.type);
+                                setTemplateData({
+                                  name: template.name,
+                                  backgroundImage: null,
+                                  fields: getDefaultFields(template.type),
+                                });
+                                setShowEditor(true);
+                              }}
+                            >
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              title="Delete"
+                              className="text-red-600 hover:text-red-700"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
-            </div>
-          ) : (
-            <div className="p-12 text-center">
-              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <FileText className="w-8 h-8 text-gray-400" />
-              </div>
-              <p className="text-gray-600 mb-4">No templates found for this school</p>
-              <Button onClick={handleCreateNew} variant="outline">
-                <Plus className="w-4 h-4 mr-2" />
-                Create Template for {selectedSchool}
-              </Button>
             </div>
           )}
         </div>
@@ -484,4 +514,3 @@ export function TemplateManagement() {
     </div>
   );
 }
-

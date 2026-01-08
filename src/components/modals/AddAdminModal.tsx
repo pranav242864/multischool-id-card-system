@@ -16,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../ui/select';
+import { schoolAPI, APIError } from '../../utils/api';
 
 interface SchoolAdmin {
   id: string;
@@ -31,9 +32,13 @@ interface AddAdminModalProps {
   isOpen: boolean;
   onClose: () => void;
   admin?: SchoolAdmin | null;
+  onSave: (admin: SchoolAdmin) => void;
 }
 
-export function AddAdminModal({ isOpen, onClose, admin }: AddAdminModalProps) {
+export function AddAdminModal({ isOpen, onClose, admin, onSave }: AddAdminModalProps) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [schools, setSchools] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -42,12 +47,26 @@ export function AddAdminModal({ isOpen, onClose, admin }: AddAdminModalProps) {
     assignedSchool: '',
   });
 
-  const schools = [
-    'Greenfield Public School',
-    'Riverside High School',
-    'Oakwood Academy',
-    'Maple Grove School',
-  ];
+  useEffect(() => {
+    const fetchSchools = async () => {
+      if (!isOpen) return;
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await schoolAPI.getSchools();
+        if (response.success && response.data) {
+          setSchools(response.data);
+        }
+      } catch (err) {
+        const apiError = err as APIError;
+        setError(apiError.message || 'Failed to load schools');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchSchools();
+  }, [isOpen]);
 
   useEffect(() => {
     if (admin) {
@@ -71,6 +90,7 @@ export function AddAdminModal({ isOpen, onClose, admin }: AddAdminModalProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    // TODO: Wire create/update API when CRUD is implemented
     console.log('Admin data:', formData);
     onClose();
   };
@@ -81,6 +101,12 @@ export function AddAdminModal({ isOpen, onClose, admin }: AddAdminModalProps) {
         <DialogHeader>
           <DialogTitle>{admin ? 'Edit School Admin' : 'Add New School Admin'}</DialogTitle>
         </DialogHeader>
+
+        {error && (
+          <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+            <p className="text-sm text-red-600">{error}</p>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -134,21 +160,32 @@ export function AddAdminModal({ isOpen, onClose, admin }: AddAdminModalProps) {
 
           <div>
             <Label htmlFor="school">Assigned School *</Label>
-            <Select
-              value={formData.assignedSchool}
-              onValueChange={(value) => setFormData({ ...formData, assignedSchool: value })}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select a school" />
-              </SelectTrigger>
-              <SelectContent>
-                {schools.map((school) => (
-                  <SelectItem key={school} value={school}>
-                    {school}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {loading ? (
+              <p className="text-gray-500 text-sm mt-1">Loading schools...</p>
+            ) : (
+              <Select
+                value={formData.assignedSchool}
+                onValueChange={(value) => setFormData({ ...formData, assignedSchool: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a school" />
+                </SelectTrigger>
+                <SelectContent>
+                  {schools.length === 0 ? (
+                    <div className="px-3 py-2 text-sm text-gray-500">No schools available</div>
+                  ) : (
+                    schools.map((school) => {
+                      const schoolId = school._id || school.id || '';
+                      return (
+                        <SelectItem key={schoolId} value={school.name}>
+                          {school.name}
+                        </SelectItem>
+                      );
+                    })
+                  )}
+                </SelectContent>
+              </Select>
+            )}
           </div>
 
           <DialogFooter>
