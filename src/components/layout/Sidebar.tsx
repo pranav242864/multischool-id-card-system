@@ -28,6 +28,7 @@ export function Sidebar({ userRole, currentView, onNavigate, isOpen, onToggle }:
     { id: 'sessions', label: 'Manage Sessions', icon: Calendar },
     { id: 'admins', label: 'Manage Admins', icon: Users },
     { id: 'teachers', label: 'Manage Teachers', icon: UserCircle },
+    { id: 'classes', label: 'Manage Classes', icon: GraduationCap },
     { id: 'students', label: 'Manage Students', icon: GraduationCap },
     { id: 'templates', label: 'Manage Templates', icon: FileText },
     { id: 'bulk', label: 'Bulk Operations', icon: Upload },

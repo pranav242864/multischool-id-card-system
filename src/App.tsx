@@ -10,6 +10,7 @@ import { SchooladminDashboard } from './components/schooladmin/SchooladminDashbo
 import { ManageStudents } from './components/schooladmin/ManageStudents';
 import { ManageStudents as SuperadminManageStudents } from './components/superadmin/ManageStudents';
 import { ManageClasses } from './components/schooladmin/ManageClasses';
+import { ManageClasses as SuperadminManageClasses } from './components/superadmin/ManageClasses';
 import { ManageTeachers } from './components/schooladmin/ManageTeachers';
 import { ManageTeachers as SuperadminManageTeachers } from './components/superadmin/ManageTeachers';
 import { BulkOperations } from './components/schooladmin/BulkOperations';
@@ -150,6 +151,8 @@ export default function App() {
           return <ManageSchoolAdmins />;
         case 'teachers':
           return <SuperadminManageTeachers />;
+        case 'classes':
+          return <SuperadminManageClasses />;
         case 'templates':
           return <SuperadminTemplateManagement />;
         case 'students':

@@ -108,7 +108,7 @@ const getStudents = async (schoolId, classId = null, page = 1, limit = 10) => {
     const classIds = await Class.find({ 
       schoolId: schoolId,
       sessionId: activeSession._id,
-      status: 'active' // Only show active classes
+      status: 'ACTIVE' // Only show active classes (enum value is uppercase)
     }).select('_id');
     const classIdList = classIds.map(c => c._id);
     

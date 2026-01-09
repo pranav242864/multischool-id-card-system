@@ -43,9 +43,10 @@ interface AddStudentModalProps {
   student?: Student | null;
   selectedClass?: Class | null;
   onSave: () => void;
+  schoolId?: string; // For Superadmin to pass schoolId
 }
 
-export function AddStudentModal({ isOpen, onClose, student, selectedClass, onSave }: AddStudentModalProps) {
+export function AddStudentModal({ isOpen, onClose, student, selectedClass, onSave, schoolId }: AddStudentModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
@@ -114,13 +115,14 @@ export function AddStudentModal({ isOpen, onClose, student, selectedClass, onSav
         classId: selectedClass._id,
         aadhaar: formData.aadhaar.trim() || undefined,
         photoUrl: formData.photoUrl.trim() || undefined,
+        schoolId: schoolId, // Pass schoolId for Superadmin (will be sent as query param)
       };
 
       if (student && student._id) {
-        // Update existing student
+        // Update existing student - schoolId is included in studentData for Superadmin
         await studentAPI.updateStudent(student._id, studentData);
       } else {
-        // Create new student
+        // Create new student - schoolId is included in studentData for Superadmin
         await studentAPI.createStudent(studentData);
       }
       

@@ -73,6 +73,19 @@ const schoolScoping = (req, res, next) => {
       return next();
     }
     
+    // Special case: School creation route - no schoolId needed (school doesn't exist yet)
+    const isSchoolCreationRoute = req.method === 'POST' && 
+      (urlToCheck === '/api/v1/schools' || 
+       urlToCheck.endsWith('/schools') ||
+       urlToCheck.includes('/schools') && !urlToCheck.includes('/schools/'));
+    
+    if (isSchoolCreationRoute) {
+      // For school creation, no schoolId is needed (school is being created)
+      req.schoolId = null;
+      req.schoolFilter = {};
+      return next();
+    }
+    
     // For all other routes (including POST/PATCH/DELETE and non-dashboard GET routes),
     // SUPERADMIN must provide schoolId in query parameter to scope the operation
     // This ensures mutations are always scoped to a specific school

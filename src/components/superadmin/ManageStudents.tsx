@@ -110,18 +110,84 @@ export function ManageStudents() {
     }
   }, [selectedSchoolId]);
 
+  // Refresh classes when modal opens to ensure newly created classes are available
+  useEffect(() => {
+    if (isModalOpen && selectedSchoolId) {
+      const refreshClasses = async () => {
+        try {
+          const classesResponse = await classAPI.getClasses({ schoolId: selectedSchoolId });
+          if (classesResponse.success && classesResponse.data) {
+            setClasses(classesResponse.data);
+          }
+        } catch (err) {
+          // Silently fail - don't show error for background refresh
+        }
+      };
+      refreshClasses();
+    }
+  }, [isModalOpen, selectedSchoolId]);
+
+  // Refresh classes when returning to class selection view (when selectedClass is cleared)
+  // This ensures newly created classes appear in the list
+  useEffect(() => {
+    if (!selectedClass && selectedSchoolId && classes.length >= 0) {
+      // Only refresh if we have a school selected but no class selected (on class selection view)
+      const refreshClasses = async () => {
+        try {
+          const classesResponse = await classAPI.getClasses({ schoolId: selectedSchoolId });
+          if (classesResponse.success && classesResponse.data) {
+            setClasses(classesResponse.data);
+          }
+        } catch (err) {
+          // Silently fail - don't show error for background refresh
+        }
+      };
+      // Small delay to avoid excessive refreshes
+      const timeoutId = setTimeout(refreshClasses, 100);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [selectedClass, selectedSchoolId]);
+
   // Get unique classes for selected school
-  const getClassesForSchool = (): string[] => {
-    const uniqueClasses = new Set<string>();
-    students.forEach(student => {
-      if (student.class && student.class !== 'N/A') {
-        uniqueClasses.add(student.class);
+  // Use the classes array fetched from API (not just classes with students)
+  const getClassesForSchool = (): Array<{ name: string; id: string; studentCount: number }> => {
+    // First, get all classes from the classes array
+    const classMap = new Map<string, { name: string; id: string; studentCount: number }>();
+    
+    // Add all classes from the API response
+    classes.forEach((cls: any) => {
+      const className = cls.className || cls.name;
+      const classId = cls._id || cls.id;
+      if (className && classId) {
+        classMap.set(className, {
+          name: className,
+          id: classId,
+          studentCount: 0 // Will be updated below
+        });
       }
     });
-    return Array.from(uniqueClasses).sort();
+    
+    // Update student counts from students array
+    students.forEach(student => {
+      if (student.class && student.class !== 'N/A') {
+        const existing = classMap.get(student.class);
+        if (existing) {
+          existing.studentCount += 1;
+        } else {
+          // If class exists in students but not in classes array, add it
+          classMap.set(student.class, {
+            name: student.class,
+            id: student.classId?._id || student.classId || '',
+            studentCount: 1
+          });
+        }
+      }
+    });
+    
+    return Array.from(classMap.values()).sort((a, b) => a.name.localeCompare(b.name));
   };
 
-  // Get student count for a class
+  // Get student count for a class (kept for backward compatibility)
   const getStudentCountForClass = (className: string): number => {
     return students.filter(student => student.class === className).length;
   };
@@ -490,10 +556,10 @@ export function ManageStudents() {
               <p className="text-gray-600 text-sm mt-1">Click on a class to view its students</p>
             </div>
             <div className="divide-y divide-gray-200">
-              {classList.map((className) => (
+              {classList.map((classItem) => (
                 <button
-                  key={className}
-                  onClick={() => setSelectedClass(className)}
+                  key={classItem.id || classItem.name}
+                  onClick={() => setSelectedClass(classItem.name)}
                   className="w-full p-6 hover:bg-gray-50 transition-colors text-left"
                 >
                   <div className="flex items-center justify-between">
@@ -502,9 +568,9 @@ export function ManageStudents() {
                         <GraduationCap className="w-6 h-6 text-green-600" />
                       </div>
                       <div>
-                        <p className="text-gray-900 font-medium text-lg">{className}</p>
+                        <p className="text-gray-900 font-medium text-lg">{classItem.name}</p>
                         <p className="text-gray-600 text-sm mt-1">
-                          {getStudentCountForClass(className)} {getStudentCountForClass(className) === 1 ? 'student' : 'students'}
+                          {classItem.studentCount} {classItem.studentCount === 1 ? 'student' : 'students'}
                         </p>
                       </div>
                     </div>
@@ -641,6 +707,46 @@ export function ManageStudents() {
           setError(null);
         }}
         student={editingStudent}
+        selectedClass={selectedClass ? classes.find((cls: any) => (cls.className || cls.name) === selectedClass) || null : null}
+        schoolId={selectedSchoolId}
+        onSave={async () => {
+          // Refresh data after save
+          if (selectedSchoolId) {
+            setLoading(true);
+            try {
+              const classesResponse = await classAPI.getClasses({ schoolId: selectedSchoolId });
+              if (classesResponse.success && classesResponse.data) {
+                setClasses(classesResponse.data);
+              }
+              const studentsResponse = await studentAPI.getStudents({ schoolId: selectedSchoolId });
+              if (studentsResponse.success && studentsResponse.data) {
+                const mappedStudents = studentsResponse.data.map((student: any) => ({
+                  _id: student._id,
+                  id: student._id,
+                  admissionNo: student.admissionNo,
+                  photo: student.photoUrl,
+                  photoUrl: student.photoUrl,
+                  name: student.name,
+                  class: student.classId?.className || 'N/A',
+                  classId: student.classId,
+                  school: student.schoolId?.name || 'N/A',
+                  schoolId: student.schoolId,
+                  session: student.sessionId?.sessionName || 'N/A',
+                  sessionId: student.sessionId,
+                  fatherName: student.fatherName || '',
+                  mobile: student.mobile || '',
+                  dob: student.dob ? new Date(student.dob).toISOString().split('T')[0] : '',
+                }));
+                setStudents(mappedStudents);
+              }
+            } catch (err) {
+              const apiError = err as APIError;
+              setError(apiError.message || 'Failed to refresh data');
+            } finally {
+              setLoading(false);
+            }
+          }
+        }}
       />
 
       {/* Preview Modal */}

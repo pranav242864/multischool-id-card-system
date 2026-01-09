@@ -98,7 +98,7 @@ const getClasses = async (schoolId, sessionId = null, page = 1, limit = 10) => {
   
   // Only return active classes (exclude deleted/inactive)
   const filter = { 
-    status: 'active' // Only show active classes
+    status: 'ACTIVE' // Only show active classes (enum value is uppercase)
   };
 
   // If schoolId is provided, filter by school and active session
