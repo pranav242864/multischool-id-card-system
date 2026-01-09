@@ -91,6 +91,35 @@ app.all('*', (req, res) => {
   });
 });
 
+// TEMP DIAGNOSTIC: Response interceptor for error tracing
+// MUST be placed BEFORE errorHandler middleware
+app.use((req, res, next) => {
+  const originalJson = res.json;
+
+  res.json = function (data) {
+    if (
+      res.statusCode >= 400 &&
+      data &&
+      data.message === 'School ID is required for this operation'
+    ) {
+      console.log('--- SCHOOL ID ERROR TRACE ---');
+      console.log('METHOD:', req.method);
+      console.log('URL:', req.originalUrl);
+      console.log('BASE URL:', req.baseUrl);
+      console.log('PATH:', req.path);
+      console.log('QUERY:', req.query);
+      console.log('ROLE:', req.user?.role);
+      console.log('req.schoolId:', req.schoolId);
+      console.trace('STACK TRACE');
+      console.log('--- END TRACE ---');
+    }
+
+    return originalJson.call(this, data);
+  };
+
+  next();
+});
+
 // Error handler middleware (should be last)
 app.use(errorHandler);
 

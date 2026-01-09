@@ -185,7 +185,7 @@ export function ManageSessions() {
         }
         if (session.activeStatus) {
           return (
-            <Badge variant="default" className="bg-green-600 text-white">
+            <Badge variant="secondary" className="text-green-600">
               <CheckCircle2 className="w-3 h-3 mr-1" />
               Active
             </Badge>

@@ -1,5 +1,5 @@
 const Notice = require('../models/Notice');
-const { getSchoolIdForOperation } = require('../utils/getSchoolId');
+const { getSchoolIdForOperation, getSchoolIdForFilter } = require('../utils/getSchoolId');
 const { isSuperadmin } = require('../utils/roleGuards');
 const asyncHandler = require('../utils/asyncHandler');
 const { logAudit } = require('../utils/audit.helper');
@@ -123,10 +123,16 @@ const createNotice = asyncHandler(async (req, res) => {
 });
 
 const getNotices = asyncHandler(async (req, res) => {
-  const schoolId = getSchoolIdForOperation(req);
+  // Use getSchoolIdForFilter for GET requests - allows SUPERADMIN to get all notices (schoolId = null)
+  // For operations (POST/PATCH/DELETE), use getSchoolIdForOperation which requires schoolId
+  const schoolId = getSchoolIdForFilter(req);
   const { includeArchived } = req.query;
 
-  const query = { schoolId };
+  // Build query - if schoolId is null (SUPERADMIN without filter), don't filter by schoolId
+  const query = {};
+  if (schoolId) {
+    query.schoolId = schoolId;
+  }
 
   if (includeArchived !== 'true') {
     query.status = 'ACTIVE';

@@ -42,7 +42,6 @@ export function ChangePasswordModal({ isOpen, onClose, school }: ChangePasswordM
 
     setIsLoading(true);
     try {
-      console.log(`Changing password for school: ${school?.id}`);
       await new Promise((resolve) => setTimeout(resolve, 1000));
       alert(`Password updated successfully for ${school?.name}`);
       setNewPassword('');

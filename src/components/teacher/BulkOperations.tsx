@@ -43,7 +43,6 @@ export function BulkOperations() {
           }
         }
       } catch (err) {
-        console.log('Templates not available, will use default fields');
         setTemplates([]);
         setSelectedTemplateId(null);
         setError(null);
@@ -120,17 +119,15 @@ export function BulkOperations() {
             template = response.data;
           }
         } catch (err) {
-          console.log('No active template found for students');
+          // No active template found
         }
       }
 
       // Extract dataTags from template - use template's fields as Excel columns
       if (template && template.dataTags && Array.isArray(template.dataTags) && template.dataTags.length > 0) {
         dataTags = template.dataTags;
-        console.log(`Using template "${template.name || template._id}" with ${dataTags.length} fields:`, dataTags);
       } else {
         dataTags = getDefaultFields();
-        console.log(`No template found, using default fields for students:`, dataTags);
       }
 
       if (!dataTags || dataTags.length === 0) {
@@ -139,8 +136,6 @@ export function BulkOperations() {
 
       // Generate Excel file using ID Card Template fields as columns
       const headers = dataTags.map(tag => getFieldHeader(tag));
-      
-      console.log(`Generating Excel template with ${headers.length} columns from ID template:`, headers);
       
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('Template');
@@ -182,10 +177,7 @@ export function BulkOperations() {
       link.click();
       window.URL.revokeObjectURL(url);
       
-      console.log(`Excel template "${filename}" generated with fields from ID Card Template`);
-      
     } catch (err) {
-      console.error('Error generating template:', err);
       const errorMessage = err instanceof Error ? err.message : 'Failed to generate template';
       if (!errorMessage.includes('Route') && !errorMessage.includes('not found')) {
         setError(errorMessage);
@@ -233,7 +225,6 @@ export function BulkOperations() {
         setError(response.message || 'Import failed');
       }
     } catch (err) {
-      console.error('Error importing data:', err);
       const errorMessage = err instanceof Error ? err.message : 'Failed to import data';
       setError(errorMessage);
       setImportResult(null);

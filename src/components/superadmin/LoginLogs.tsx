@@ -42,9 +42,9 @@ export function LoginLogs() {
         }
       } catch (err) {
         const apiError = err as APIError;
-        // Handle 403 specifically
-        if (apiError.message?.includes('403') || apiError.message?.includes('Forbidden') || apiError.message?.includes('Access denied')) {
-          setError('Access denied. Login logs are only available to Superadmin users.');
+        // Handle 403 specifically - display backend message without redirect
+        if (apiError.status === 403) {
+          setError(apiError.message || 'Access denied. Login logs are only available to Superadmin users.');
         } else {
           setError(apiError.message || 'Failed to load login logs');
         }

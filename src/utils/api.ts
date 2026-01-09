@@ -88,6 +88,46 @@ async function apiRequest<T>(
       ...options,
       headers,
     });
+
+    // Global auth handling: 401 Unauthorized (e.g., expired/invalid token)
+    if (response.status === 401) {
+      // Attempt to extract a meaningful error message from the backend
+      let message = 'Unauthorized. Please login again.';
+      try {
+        const rawText = await response.text();
+        if (rawText) {
+          try {
+            const parsed = JSON.parse(rawText);
+            if (parsed && typeof parsed.message === 'string') {
+              message = parsed.message;
+            } else {
+              message = rawText;
+            }
+          } catch {
+            // Not JSON, use raw text as message
+            message = rawText;
+          }
+        }
+      } catch {
+        // If parsing fails, fall back to default message
+      }
+
+      // Clear auth state
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('user');
+
+      // Prevent infinite redirect loops by avoiding redirect when already on /login
+      if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+        window.location.replace('/login');
+      }
+
+      const apiError: APIError = {
+        success: false,
+        message,
+        status: response.status,
+      };
+      throw apiError;
+    }
     
     // Handle non-JSON responses (blobs, etc.)
     const contentType = response.headers.get('content-type');
@@ -689,6 +729,44 @@ export const schoolAPI = {
 };
 
 // ============================================================================
+// ADMIN API
+// ============================================================================
+
+export const adminAPI = {
+  // Get school admins
+  getSchoolAdmins: async (schoolId?: string) => {
+    return apiRequest<{ success: boolean; data: any[]; count?: number }>(
+      '/users',
+      { method: 'GET' },
+      schoolId ? { schoolId, role: 'SCHOOLADMIN' } : { role: 'SCHOOLADMIN' }
+    );
+  },
+
+  // Create school admin
+  createSchoolAdmin: async (adminData: {
+    name: string;
+    email: string;
+    password: string;
+    schoolId: string;
+    username?: string;
+  }) => {
+    return apiRequest<{ success: boolean; data: any; message: string }>(
+      '/users/admin',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          name: adminData.name,
+          email: adminData.email,
+          password: adminData.password,
+          schoolId: adminData.schoolId,
+          username: adminData.username,
+        }),
+      }
+    );
+  },
+};
+
+// ============================================================================
 // SESSION API
 // ============================================================================
 
@@ -841,6 +919,37 @@ export const pdfAPI = {
         body: JSON.stringify({ studentIds }),
       },
       { schoolId }
+    );
+  },
+};
+
+// ============================================================================
+// TEACHER ADMIN API (SUPERADMIN only)
+// ============================================================================
+
+export const teacherAdminAPI = {
+  // Create teacher user (SUPERADMIN only)
+  createTeacherUser: async (teacherData: {
+    name: string;
+    email: string;
+    password: string;
+    mobile: string;
+    schoolId: string;
+    username?: string;
+  }) => {
+    return apiRequest<{ success: boolean; data: any; message: string }>(
+      '/users/teacher-admin',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          name: teacherData.name,
+          email: teacherData.email,
+          password: teacherData.password,
+          mobile: teacherData.mobile,
+          schoolId: teacherData.schoolId,
+          username: teacherData.username,
+        }),
+      }
     );
   },
 };

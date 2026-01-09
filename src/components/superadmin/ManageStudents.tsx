@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { DataTable, Column } from '../ui/DataTable';
 import { Button } from '../ui/button';
-import { Plus, Edit, Trash2, Eye, CreditCard, ImageIcon, School, GraduationCap, ChevronRight } from 'lucide-react';
+import { Plus, Edit, Trash2, Eye, CreditCard, ImageIcon, School, GraduationCap, ChevronRight, Loader2 } from 'lucide-react';
 import { AddStudentModal } from '../modals/AddStudentModal';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
-import { schoolAPI, studentAPI, classAPI, APIError } from '../../utils/api';
+import { schoolAPI, studentAPI, classAPI, pdfAPI, previewAPI, downloadBlob, APIError } from '../../utils/api';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 
 interface Student {
   _id?: string;
@@ -35,6 +36,12 @@ export function ManageStudents() {
   const [schools, setSchools] = useState<any[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [classes, setClasses] = useState<any[]>([]);
+  const [generatingPdfId, setGeneratingPdfId] = useState<string | null>(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [previewHtml, setPreviewHtml] = useState<string>('');
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [selectedStudents, setSelectedStudents] = useState<Set<string>>(new Set());
+  const [generatingBulkPdf, setGeneratingBulkPdf] = useState(false);
 
   useEffect(() => {
     const fetchSchools = async () => {
@@ -135,11 +142,99 @@ export function ManageStudents() {
   };
 
   const handleDelete = (studentId: string) => {
-    // TODO: Wire delete API when CRUD is implemented
-    console.log('Delete student:', studentId);
+    // Delete functionality to be implemented
+  };
+
+  const handleGeneratePDF = async (student: Student) => {
+    const studentId = student._id || student.id || '';
+    if (!studentId || !selectedSchoolId) return;
+
+    setGeneratingPdfId(studentId);
+    setError(null);
+
+    try {
+      const blob = await pdfAPI.generateStudentPDF(studentId, selectedSchoolId);
+      const filename = `student-${student.admissionNo}.pdf`;
+      downloadBlob(blob, filename);
+    } catch (err) {
+      const apiError = err as APIError;
+      setError(apiError.message || 'Failed to generate PDF');
+    } finally {
+      setGeneratingPdfId(null);
+    }
+  };
+
+  const handlePreview = async (student: Student) => {
+    const studentId = student._id || student.id || '';
+    if (!studentId || !selectedSchoolId) return;
+
+    setIsPreviewOpen(true);
+    setPreviewLoading(true);
+    setPreviewHtml('');
+    setError(null);
+
+    try {
+      const response = await previewAPI.previewStudentCard(studentId, selectedSchoolId);
+      if (response.success && response.html) {
+        setPreviewHtml(response.html);
+      } else {
+        setError('Preview not available');
+      }
+    } catch (err) {
+      const apiError = err as APIError;
+      setError(apiError.message || 'Failed to load preview');
+      setIsPreviewOpen(false);
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const handleBulkPDF = async () => {
+    if (selectedStudents.size === 0 || !selectedSchoolId) return;
+
+    setGeneratingBulkPdf(true);
+    setError(null);
+
+    try {
+      const studentIds = Array.from(selectedStudents);
+      const blob = await pdfAPI.generateBulkStudentPDF(studentIds, selectedSchoolId);
+      const filename = `students-bulk-${new Date().toISOString().split('T')[0]}.zip`;
+      downloadBlob(blob, filename);
+      setSelectedStudents(new Set());
+    } catch (err) {
+      const apiError = err as APIError;
+      setError(apiError.message || 'Failed to generate bulk PDF');
+    } finally {
+      setGeneratingBulkPdf(false);
+    }
+  };
+
+  const handleToggleSelect = (studentId: string) => {
+    const newSelected = new Set(selectedStudents);
+    if (newSelected.has(studentId)) {
+      newSelected.delete(studentId);
+    } else {
+      newSelected.add(studentId);
+    }
+    setSelectedStudents(newSelected);
   };
 
   const columns: Column<Student>[] = [
+    {
+      key: 'select',
+      header: '',
+      render: (student) => {
+        const studentId = student._id || student.id || '';
+        return (
+          <input
+            type="checkbox"
+            checked={selectedStudents.has(studentId)}
+            onChange={() => handleToggleSelect(studentId)}
+            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+          />
+        );
+      },
+    },
     {
       key: 'photo',
       header: 'Photo',
@@ -195,12 +290,17 @@ export function ManageStudents() {
       header: 'Actions',
       render: (student) => {
         const studentId = student._id || student.id || '';
+        const isGeneratingPdf = generatingPdfId === studentId;
+        const isDisabledForActions = isGeneratingPdf;
+
         return (
           <div className="flex items-center gap-1">
             <Button
               variant="ghost"
               size="sm"
-              title="View"
+              title="Preview"
+              onClick={() => handlePreview(student)}
+              disabled={isDisabledForActions}
             >
               <Eye className="w-4 h-4" />
             </Button>
@@ -216,9 +316,15 @@ export function ManageStudents() {
               variant="ghost"
               size="sm"
               title="Generate ID Card"
+              onClick={() => handleGeneratePDF(student)}
               className="text-blue-600"
+              disabled={isDisabledForActions}
             >
-              <CreditCard className="w-4 h-4" />
+              {isGeneratingPdf ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <CreditCard className="w-4 h-4" />
+              )}
             </Button>
             <Button
               variant="ghost"
@@ -424,10 +530,31 @@ export function ManageStudents() {
             {selectedSchool} - {selectedClass}
           </p>
         </div>
-        <Button onClick={() => setIsModalOpen(true)} className="bg-blue-600 hover:bg-blue-700">
-          <Plus className="w-4 h-4 mr-2" />
-          Add New Student
-        </Button>
+        <div className="flex items-center gap-2">
+          {selectedStudents.size > 0 && (
+            <Button
+              onClick={handleBulkPDF}
+              className="bg-green-600 hover:bg-green-700"
+              disabled={generatingBulkPdf || !selectedSchoolId}
+            >
+              {generatingBulkPdf ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <CreditCard className="w-4 h-4 mr-2" />
+                  Generate PDFs ({selectedStudents.size})
+                </>
+              )}
+            </Button>
+          )}
+          <Button onClick={() => setIsModalOpen(true)} className="bg-blue-600 hover:bg-blue-700">
+            <Plus className="w-4 h-4 mr-2" />
+            Add New Student
+          </Button>
+        </div>
       </div>
 
       {/* Breadcrumb Navigation */}
@@ -458,6 +585,15 @@ export function ManageStudents() {
         <span className="text-gray-400">/</span>
         <span className="text-gray-900 font-medium">{selectedClass}</span>
       </div>
+
+      {/* Error Display */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-md p-4">
+          <div className="flex items-start gap-3">
+            <p className="text-sm text-red-600">{error}</p>
+          </div>
+        </div>
+      )}
 
       {/* School and Class Header */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">
@@ -502,9 +638,35 @@ export function ManageStudents() {
         onClose={() => {
           setIsModalOpen(false);
           setEditingStudent(null);
+          setError(null);
         }}
         student={editingStudent}
       />
+
+      {/* Preview Modal */}
+      <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Student Card Preview</DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto">
+            {previewLoading ? (
+              <div className="flex items-center justify-center p-12">
+                <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+              </div>
+            ) : previewHtml ? (
+              <div 
+                className="w-full"
+                dangerouslySetInnerHTML={{ __html: previewHtml }}
+              />
+            ) : (
+              <div className="p-12 text-center text-gray-600">
+                Preview not available
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

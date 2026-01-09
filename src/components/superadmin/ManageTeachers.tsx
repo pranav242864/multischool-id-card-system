@@ -4,6 +4,7 @@ import { Button } from '../ui/button';
 import { Plus, Edit, Trash2, UserCircle, School, ChevronRight } from 'lucide-react';
 import { Badge } from '../ui/badge';
 import { schoolAPI, teacherAPI, APIError } from '../../utils/api';
+import { AddTeacherAdminModal } from '../modals/AddTeacherAdminModal';
 
 interface Teacher {
   _id?: string;
@@ -27,6 +28,7 @@ export function ManageTeachers() {
   const [selectedSchoolId, setSelectedSchoolId] = useState<string>('');
   const [schools, setSchools] = useState<any[]>([]);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchSchools = async () => {
@@ -48,52 +50,58 @@ export function ManageTeachers() {
     fetchSchools();
   }, []);
 
+  const fetchTeachers = async () => {
+    if (!selectedSchoolId) return;
+    
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await teacherAPI.getTeachers({ schoolId: selectedSchoolId });
+      if (response.success && response.data) {
+        // Map backend data to frontend format
+        const mappedTeachers = response.data.map((teacher: any) => ({
+          _id: teacher._id,
+          id: teacher._id,
+          name: teacher.name,
+          email: teacher.email || '',
+          mobile: teacher.mobile || '',
+          school: teacher.schoolId?.name || 'N/A',
+          schoolId: teacher.schoolId,
+          assignedClass: teacher.classId?.className || 'N/A',
+          classId: teacher.classId,
+          subject: 'N/A', // Not available in backend
+          status: (teacher.status || 'ACTIVE').toLowerCase() as 'active' | 'inactive',
+        }));
+        setTeachers(mappedTeachers);
+      }
+    } catch (err) {
+      const apiError = err as APIError;
+      setError(apiError.message || 'Failed to load teachers');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (selectedSchoolId) {
-      const fetchTeachers = async () => {
-        setLoading(true);
-        setError(null);
-        try {
-          const response = await teacherAPI.getTeachers({ schoolId: selectedSchoolId });
-          if (response.success && response.data) {
-            // Map backend data to frontend format
-            const mappedTeachers = response.data.map((teacher: any) => ({
-              _id: teacher._id,
-              id: teacher._id,
-              name: teacher.name,
-              email: teacher.email || '',
-              mobile: teacher.mobile || '',
-              school: teacher.schoolId?.name || 'N/A',
-              schoolId: teacher.schoolId,
-              assignedClass: teacher.classId?.className || 'N/A',
-              classId: teacher.classId,
-              subject: 'N/A', // Not available in backend
-              status: (teacher.status || 'ACTIVE').toLowerCase() as 'active' | 'inactive',
-            }));
-            setTeachers(mappedTeachers);
-          }
-        } catch (err) {
-          const apiError = err as APIError;
-          setError(apiError.message || 'Failed to load teachers');
-        } finally {
-          setLoading(false);
-        }
-      };
-
       fetchTeachers();
     }
   }, [selectedSchoolId]);
 
+  const handleAddTeacher = async () => {
+    setSuccessMessage('Teacher created successfully');
+    setTimeout(() => setSuccessMessage(null), 3000);
+    await fetchTeachers();
+  };
+
   const filteredTeachers = teachers;
 
   const handleEdit = (teacher: Teacher) => {
-    // TODO: Wire edit API when CRUD is implemented
     setIsModalOpen(true);
   };
 
   const handleDelete = (teacherId: string) => {
-    // TODO: Wire delete API when CRUD is implemented
-    console.log('Delete teacher:', teacherId);
+    // Delete functionality to be implemented
   };
 
   const columns: Column<Teacher>[] = [
@@ -209,7 +217,11 @@ export function ManageTeachers() {
           </p>
         </div>
         {selectedSchool && (
-          <Button onClick={() => setIsModalOpen(true)} className="bg-blue-600 hover:bg-blue-700">
+          <Button 
+            onClick={() => setIsModalOpen(true)} 
+            className="bg-blue-600 hover:bg-blue-700"
+            disabled={loading}
+          >
             <Plus className="w-4 h-4 mr-2" />
             Add New Teacher
           </Button>
@@ -267,6 +279,19 @@ export function ManageTeachers() {
       ) : (
         /* Teachers Table */
         <div className="space-y-4">
+          {/* Success Message */}
+          {successMessage && (
+            <div className="bg-green-50 border border-green-200 rounded-md p-4">
+              <p className="text-sm text-green-600">{successMessage}</p>
+            </div>
+          )}
+
+          {/* Error Display */}
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-md p-4">
+              <p className="text-sm text-red-600">{error}</p>
+            </div>
+          )}
           {/* Back Button */}
           <Button
             variant="outline"
@@ -326,6 +351,17 @@ export function ManageTeachers() {
           )}
         </div>
       )}
+
+      {/* Add Teacher Modal */}
+      <AddTeacherAdminModal
+        isOpen={isModalOpen}
+        onClose={() => {
+          setIsModalOpen(false);
+          setError(null);
+        }}
+        schoolId={selectedSchoolId}
+        onSave={handleAddTeacher}
+      />
     </div>
   );
 }

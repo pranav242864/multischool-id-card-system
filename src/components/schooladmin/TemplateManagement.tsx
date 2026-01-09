@@ -114,8 +114,6 @@ export function TemplateManagement({ userRole = 'schooladmin' }: TemplateManagem
   };
 
   const handleSaveTemplate = () => {
-    // TODO: Wire create/update API when CRUD is implemented
-    console.log('Template data:', templateData);
     setShowEditor(false);
   };
 

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { School, Users, GraduationCap, Bell, FileText, ExternalLink } from 'lucide-react';
 import { StatCard } from '../ui/StatCard';
 import { Button } from '../ui/button';
-import { schoolAPI, noticeAPI, APIError } from '../../utils/api';
+import { schoolAPI, noticeAPI, adminAPI, teacherAPI, APIError } from '../../utils/api';
 
 interface SuperadminDashboardProps {
   onNavigate: (view: string) => void;
@@ -30,6 +30,33 @@ export function SuperadminDashboard({ onNavigate }: SuperadminDashboardProps) {
         if (schoolsResponse.success && schoolsResponse.data) {
           setSchools(schoolsResponse.data);
           setStats(prev => ({ ...prev, totalSchools: schoolsResponse.data.length }));
+        }
+
+        // Fetch school admins
+        const adminsResponse = await adminAPI.getSchoolAdmins();
+        if (adminsResponse.success && adminsResponse.data) {
+          setStats(prev => ({ ...prev, totalAdmins: adminsResponse.data.length }));
+        }
+
+        // Fetch teachers across all schools (SUPERADMIN can see all)
+        // Note: getTeachers requires schoolId, so we'll fetch for each school
+        let totalTeachers = 0;
+        if (schoolsResponse.success && schoolsResponse.data) {
+          const teacherPromises = schoolsResponse.data.map(async (school: any) => {
+            try {
+              const schoolId = school._id || school.id;
+              const teachersResponse = await teacherAPI.getTeachers({ schoolId });
+              if (teachersResponse.success && teachersResponse.data) {
+                return teachersResponse.data.length;
+              }
+              return 0;
+            } catch (err) {
+              return 0;
+            }
+          });
+          const teacherCounts = await Promise.all(teacherPromises);
+          totalTeachers = teacherCounts.reduce((sum, count) => sum + count, 0);
+          setStats(prev => ({ ...prev, totalTeachers }));
         }
 
         // Fetch notices (for SUPERADMIN, no schoolId needed)

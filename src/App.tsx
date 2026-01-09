@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { LoginPage } from './components/auth/LoginPage';
 import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
@@ -36,27 +36,106 @@ export default function App() {
   const [currentView, setCurrentView] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  const handleLogin = (email: string, role: UserRole) => {
-    const userData: User = {
-      email,
-      role,
-      name: role === 'superadmin' ? 'Admin User' : role === 'schooladmin' ? 'John Doe' : 'Sarah Johnson',
-      schoolName: role !== 'superadmin' ? 'Greenfield Public School' : undefined,
-      assignedClass: role === 'teacher' ? 'Class 10-A' : undefined,
+  const handleLogin = (userData: {
+    email: string;
+    role: string;
+    name: string;
+    schoolId?: string | null;
+    schoolName?: string | null;
+    assignedClass?: string;
+  }) => {
+    // Convert role to UserRole type
+    const roleMap: Record<string, UserRole> = {
+      'SUPERADMIN': 'superadmin',
+      'superadmin': 'superadmin',
+      'SCHOOLADMIN': 'schooladmin',
+      'schooladmin': 'schooladmin',
+      'TEACHER': 'teacher',
+      'teacher': 'teacher',
     };
-    setCurrentUser(userData);
+    
+    const mappedUser: User = {
+      email: userData.email,
+      role: roleMap[userData.role] || 'teacher',
+      name: userData.name,
+      schoolName: userData.schoolName || undefined,
+      assignedClass: userData.assignedClass,
+    };
+    
+    setCurrentUser(mappedUser);
     setIsAuthenticated(true);
     setCurrentView('dashboard');
   };
 
+  // Session hygiene on mount:
+  // Previously we auto-logged in if a token + user were present, which skipped the login screen.
+  // To keep the login flow explicit and avoid auto-login as SUPERADMIN, we now only
+  // clear obviously invalid data and always show the login screen on first load.
+  useEffect(() => {
+    const token = localStorage.getItem('authToken');
+    const userStr = localStorage.getItem('user');
+
+    // If either part of the session is missing or malformed, clear both.
+    if (!token || !userStr) {
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('user');
+      return;
+    }
+
+    try {
+      // Validate that stored user is at least parseable JSON
+      JSON.parse(userStr);
+    } catch {
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('user');
+    }
+  }, []);
+
   const handleLogout = () => {
+    // Clear authentication data
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('user');
     setIsAuthenticated(false);
     setCurrentUser(null);
     setCurrentView('dashboard');
   };
 
+  // Route guard: Redirect unauthorized users away from admin-only views
+  useEffect(() => {
+    if (!currentUser || !isAuthenticated) return;
+
+    const superadminOnlyViews = ['schools', 'sessions', 'admins', 'logs'];
+    const adminOnlyViews = ['classes', 'students', 'teachers', 'templates', 'bulk'];
+    
+    // Guard: Prevent non-superadmin from accessing superadmin-only views
+    if (superadminOnlyViews.includes(currentView) && currentUser.role !== 'superadmin') {
+      setCurrentView('dashboard');
+    }
+    
+    // Guard: Prevent teachers from accessing admin-only views (except bulk which is allowed)
+    if (adminOnlyViews.includes(currentView) && currentUser.role === 'teacher' && currentView !== 'bulk') {
+      setCurrentView('dashboard');
+    }
+  }, [currentView, currentUser, isAuthenticated]);
+
   const renderContent = () => {
     if (!currentUser) return null;
+
+    // Define admin-only views
+    const superadminOnlyViews = ['schools', 'sessions', 'admins', 'logs'];
+    const adminOnlyViews = ['classes', 'students', 'teachers', 'templates', 'bulk'];
+    
+    // Guard: Prevent non-superadmin from accessing superadmin-only views
+    if (superadminOnlyViews.includes(currentView) && currentUser.role !== 'superadmin') {
+      return currentUser.role === 'schooladmin' 
+        ? <SchooladminDashboard onNavigate={setCurrentView} />
+        : <TeacherDashboard />;
+    }
+    
+    // Guard: Prevent teachers from accessing admin-only views (except bulk)
+    if (adminOnlyViews.includes(currentView) && currentUser.role === 'teacher' && currentView !== 'bulk') {
+      return <TeacherDashboard />;
+    }
 
     // Superadmin views
     if (currentUser.role === 'superadmin') {

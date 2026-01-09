@@ -121,8 +121,6 @@ export function ManageSchools() {
   };
 
   const handleUpdateSchool = async (updatedSchool: School) => {
-    // TODO: Wire update API when PATCH endpoint is implemented
-    console.log('Update school:', updatedSchool);
     setIsModalOpen(false);
     setEditingSchool(null);
     await fetchSchools();

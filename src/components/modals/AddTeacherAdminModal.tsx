@@ -16,26 +16,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../ui/select';
-import { schoolAPI, adminAPI, APIError } from '../../utils/api';
+import { schoolAPI, teacherAdminAPI, APIError } from '../../utils/api';
 
-interface SchoolAdmin {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  assignedSchool: string;
-  status: 'active' | 'inactive';
-  createdAt: string;
-}
-
-interface AddAdminModalProps {
+interface AddTeacherAdminModalProps {
   isOpen: boolean;
   onClose: () => void;
-  admin?: SchoolAdmin | null;
-  onSave: (admin: SchoolAdmin) => void;
+  schoolId?: string;
+  onSave: () => void;
 }
 
-export function AddAdminModal({ isOpen, onClose, admin, onSave }: AddAdminModalProps) {
+export function AddTeacherAdminModal({ isOpen, onClose, schoolId: initialSchoolId, onSave }: AddTeacherAdminModalProps) {
   const [loadingSchools, setLoadingSchools] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,9 +33,9 @@ export function AddAdminModal({ isOpen, onClose, admin, onSave }: AddAdminModalP
   const [formData, setFormData] = useState({
     name: '',
     email: '',
-    phone: '',
     password: '',
-    schoolId: '',
+    mobile: '',
+    schoolId: initialSchoolId || '',
   });
 
   useEffect(() => {
@@ -70,40 +60,30 @@ export function AddAdminModal({ isOpen, onClose, admin, onSave }: AddAdminModalP
   }, [isOpen]);
 
   useEffect(() => {
-    if (admin) {
-      // For editing, we'd need to find schoolId from assignedSchool name
-      // For now, reset form when editing (edit functionality not implemented)
-      setFormData({
-        name: admin.name,
-        email: admin.email,
-        phone: admin.phone,
-        password: '',
-        schoolId: '',
-      });
-    } else {
+    if (!isOpen) {
       setFormData({
         name: '',
         email: '',
-        phone: '',
         password: '',
-        schoolId: '',
+        mobile: '',
+        schoolId: initialSchoolId || '',
       });
+      setError(null);
     }
-    setError(null);
-  }, [admin, isOpen]);
+  }, [isOpen, initialSchoolId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Only allow creation (not editing) for now
-    if (admin) {
-      setError('Edit functionality not yet implemented');
+
+    // Validate required fields
+    if (!formData.name || !formData.email || !formData.password || !formData.mobile || !formData.schoolId) {
+      setError('All fields are required');
       return;
     }
 
-    // Validate required fields
-    if (!formData.name || !formData.email || !formData.password || !formData.schoolId) {
-      setError('All fields are required');
+    // Validate mobile format (10 digits)
+    if (!/^[0-9]{10}$/.test(formData.mobile)) {
+      setError('Mobile number must be exactly 10 digits');
       return;
     }
 
@@ -111,32 +91,24 @@ export function AddAdminModal({ isOpen, onClose, admin, onSave }: AddAdminModalP
     setError(null);
 
     try {
-      const response = await adminAPI.createSchoolAdmin({
+      const response = await teacherAdminAPI.createTeacherUser({
         name: formData.name,
         email: formData.email,
         password: formData.password,
+        mobile: formData.mobile,
         schoolId: formData.schoolId,
       });
 
       if (response.success) {
-        // Call onSave callback with the created admin data
-        onSave({
-          id: response.data.id,
-          name: response.data.name,
-          email: response.data.email,
-          phone: formData.phone,
-          assignedSchool: schools.find(s => (s._id || s.id) === formData.schoolId)?.name || '',
-          status: 'active',
-          createdAt: new Date().toISOString(),
-        });
         // Close modal only on success
         onClose();
+        onSave();
       } else {
-        setError(response.message || 'Failed to create admin');
+        setError(response.message || 'Failed to create teacher');
       }
     } catch (err) {
       const apiError = err as APIError;
-      setError(apiError.message || 'Failed to create admin');
+      setError(apiError.message || 'Failed to create teacher');
     } finally {
       setSubmitting(false);
     }
@@ -146,7 +118,7 @@ export function AddAdminModal({ isOpen, onClose, admin, onSave }: AddAdminModalP
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{admin ? 'Edit School Admin' : 'Add New School Admin'}</DialogTitle>
+          <DialogTitle>Add New Teacher</DialogTitle>
         </DialogHeader>
 
         {error && (
@@ -164,6 +136,7 @@ export function AddAdminModal({ isOpen, onClose, admin, onSave }: AddAdminModalP
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               placeholder="Enter full name"
               required
+              disabled={submitting}
             />
           </div>
 
@@ -174,36 +147,39 @@ export function AddAdminModal({ isOpen, onClose, admin, onSave }: AddAdminModalP
               type="email"
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              placeholder="admin@school.edu"
+              placeholder="teacher@school.edu"
               required
+              disabled={submitting}
             />
           </div>
 
           <div>
-            <Label htmlFor="phone">Phone Number *</Label>
+            <Label htmlFor="password">Password *</Label>
             <Input
-              id="phone"
-              type="tel"
-              value={formData.phone}
-              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-              placeholder="+1 234 567 8900"
+              id="password"
+              type="password"
+              value={formData.password}
+              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+              placeholder="Enter password"
               required
+              disabled={submitting}
             />
           </div>
 
-          {!admin && (
-            <div>
-              <Label htmlFor="password">Password *</Label>
-              <Input
-                id="password"
-                type="password"
-                value={formData.password}
-                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                placeholder="Enter password"
-                required
-              />
-            </div>
-          )}
+          <div>
+            <Label htmlFor="mobile">Mobile Number *</Label>
+            <Input
+              id="mobile"
+              type="tel"
+              value={formData.mobile}
+              onChange={(e) => setFormData({ ...formData, mobile: e.target.value })}
+              placeholder="10-digit mobile number"
+              maxLength={10}
+              required
+              disabled={submitting}
+            />
+            <p className="text-xs text-gray-500 mt-1">10 digits only</p>
+          </div>
 
           <div>
             <Label htmlFor="school">Assigned School *</Label>
@@ -214,6 +190,7 @@ export function AddAdminModal({ isOpen, onClose, admin, onSave }: AddAdminModalP
                 value={formData.schoolId}
                 onValueChange={(value) => setFormData({ ...formData, schoolId: value })}
                 required
+                disabled={submitting || !!initialSchoolId}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select a school" />
@@ -246,7 +223,7 @@ export function AddAdminModal({ isOpen, onClose, admin, onSave }: AddAdminModalP
               Cancel
             </Button>
             <Button type="submit" disabled={submitting || loadingSchools}>
-              {submitting ? 'Creating...' : (admin ? 'Update Admin' : 'Create Admin')}
+              {submitting ? 'Creating...' : 'Create Teacher'}
             </Button>
           </DialogFooter>
         </form>

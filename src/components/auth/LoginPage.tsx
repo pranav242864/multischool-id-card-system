@@ -6,7 +6,14 @@ import { GraduationCap, Mail, Lock } from 'lucide-react';
 import { authAPI, APIError } from '../../utils/api';
 
 interface LoginPageProps {
-  onLogin: (email: string, role: 'superadmin' | 'schooladmin' | 'teacher') => void;
+  onLogin: (userData: {
+    email: string;
+    role: string;
+    name: string;
+    schoolId?: string | null;
+    schoolName?: string | null;
+    assignedClass?: string;
+  }) => void;
 }
 
 export function LoginPage({ onLogin }: LoginPageProps) {
@@ -23,16 +30,17 @@ export function LoginPage({ onLogin }: LoginPageProps) {
     try {
       const data = await authAPI.login(email, password);
 
-      // Extract role from response and convert to lowercase for onLogin callback
-      const role = data.user?.role?.toLowerCase() || 'teacher';
-      const roleMap: Record<string, 'superadmin' | 'schooladmin' | 'teacher'> = {
-        'superadmin': 'superadmin',
-        'schooladmin': 'schooladmin',
-        'teacher': 'teacher',
-      };
-
-      // Call onLogin with actual user data
-      onLogin(data.user.email, roleMap[role] || 'teacher');
+      // Call onLogin with full user data from backend
+      if (data.user) {
+        onLogin({
+          email: data.user.email,
+          role: data.user.role,
+          name: data.user.name,
+          schoolId: data.user.schoolId,
+          schoolName: data.user.schoolName,
+          assignedClass: undefined, // Teachers can fetch this separately if needed
+        });
+      }
     } catch (err) {
       const error = err as APIError;
       setError(error.message || 'Network error. Please check your connection and try again.');
@@ -50,14 +58,17 @@ export function LoginPage({ onLogin }: LoginPageProps) {
       // For now, using placeholder values
       const data = await authAPI.googleLogin('', 'demo@school.com', 'Demo User');
 
-      const role = data.user?.role?.toLowerCase() || 'schooladmin';
-      const roleMap: Record<string, 'superadmin' | 'schooladmin' | 'teacher'> = {
-        'superadmin': 'superadmin',
-        'schooladmin': 'schooladmin',
-        'teacher': 'teacher',
-      };
-
-      onLogin(data.user.email, roleMap[role] || 'schooladmin');
+      // Call onLogin with full user data from backend
+      if (data.user) {
+        onLogin({
+          email: data.user.email,
+          role: data.user.role,
+          name: data.user.name,
+          schoolId: data.user.schoolId,
+          schoolName: data.user.schoolName,
+          assignedClass: undefined, // Teachers can fetch this separately if needed
+        });
+      }
     } catch (err) {
       const error = err as APIError;
       setError(error.message || 'Google sign-in failed. Please try again.');

@@ -6,7 +6,7 @@ import { Badge } from '../ui/badge';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { AddStudentModal } from '../modals/AddStudentModal';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { templateAPI, bulkImportAPI, studentAPI, noticeAPI, APIError } from '../../utils/api';
+import { templateAPI, bulkImportAPI, studentAPI, noticeAPI, APIError, getUserRole } from '../../utils/api';
 import ExcelJS from 'exceljs';
 
 interface Student {
@@ -113,8 +113,7 @@ export function TeacherDashboard() {
   };
 
   const handleDelete = (studentId: string) => {
-    // TODO: Wire delete API when CRUD is implemented
-    console.log('Delete student:', studentId);
+    // Delete functionality to be implemented
   };
 
   // Fetch templates for students
@@ -136,7 +135,6 @@ export function TeacherDashboard() {
           }
         }
       } catch (err) {
-        console.log('Templates not available, will use default fields');
         setTemplates([]);
         setSelectedTemplateId(null);
         setError(null);
@@ -213,17 +211,15 @@ export function TeacherDashboard() {
             template = response.data;
           }
         } catch (err) {
-          console.log('No active template found for students');
+          // No active template found
         }
       }
 
       // Extract dataTags from template - use template's fields as Excel columns
       if (template && template.dataTags && Array.isArray(template.dataTags) && template.dataTags.length > 0) {
         dataTags = template.dataTags;
-        console.log(`Using template "${template.name || template._id}" with ${dataTags.length} fields:`, dataTags);
       } else {
         dataTags = getDefaultFields();
-        console.log(`No template found, using default fields for students:`, dataTags);
       }
 
       if (!dataTags || dataTags.length === 0) {
@@ -232,8 +228,6 @@ export function TeacherDashboard() {
 
       // Generate Excel file using ID Card Template fields as columns
       const headers = dataTags.map(tag => getFieldHeader(tag));
-      
-      console.log(`Generating Excel template with ${headers.length} columns from ID template:`, headers);
       
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('Template');
@@ -274,10 +268,7 @@ export function TeacherDashboard() {
       link.click();
       window.URL.revokeObjectURL(url);
       
-      console.log(`Excel template "${filename}" generated with fields from ID Card Template`);
-      
     } catch (err) {
-      console.error('Error generating template:', err);
       const errorMessage = err instanceof Error ? err.message : 'Failed to generate template';
       if (!errorMessage.includes('Route') && !errorMessage.includes('not found')) {
         setError(errorMessage);
@@ -325,7 +316,6 @@ export function TeacherDashboard() {
         setError(response.message || 'Import failed');
       }
     } catch (err) {
-      console.error('Error importing data:', err);
       const errorMessage = err instanceof Error ? err.message : 'Failed to import data';
       setError(errorMessage);
       setImportResult(null);
@@ -380,28 +370,33 @@ export function TeacherDashboard() {
     {
       key: 'actions',
       header: 'Actions',
-      render: (student) => (
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => handleEdit(student)}
-            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-            title="Edit"
-          >
-            <Edit className="w-4 h-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => handleDelete(student.id)}
-            className="text-red-600 hover:text-red-700 hover:bg-red-50"
-            title="Delete"
-          >
-            <Trash2 className="w-4 h-4" />
-          </Button>
-        </div>
-      ),
+      render: (student) => {
+        const userRole = getUserRole();
+        const isTeacher = userRole === 'teacher' || userRole === 'Teacher';
+        return (
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => handleEdit(student)}
+              className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+              title="Edit"
+            >
+              <Edit className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => handleDelete(student.id)}
+              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+              title={isTeacher ? "Delete (Admin only)" : "Delete"}
+              disabled={isTeacher}
+            >
+              <Trash2 className="w-4 h-4" />
+            </Button>
+          </div>
+        );
+      },
     },
   ];
 
