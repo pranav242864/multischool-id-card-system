@@ -109,7 +109,7 @@ export function AddClassModalAdmin({ isOpen, onClose, onSave, schoolId, schoolNa
         </DialogHeader>
 
         {error && (
-          <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+          <div className="p-3 bg-red-50 border border-red-200 rounded-md mt-4">
             <div className="flex items-start gap-2">
               <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
               <div>
@@ -125,10 +125,10 @@ export function AddClassModalAdmin({ isOpen, onClose, onSave, schoolId, schoolNa
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-6 mt-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="md:col-span-2">
-              <Label htmlFor="school">School</Label>
+              <Label htmlFor="school" className="mb-2 block">School</Label>
               <Input
                 id="school"
                 value={schoolName}
@@ -137,7 +137,7 @@ export function AddClassModalAdmin({ isOpen, onClose, onSave, schoolId, schoolNa
               />
             </div>
             <div className="md:col-span-2">
-              <Label htmlFor="className">Class Name *</Label>
+              <Label htmlFor="className" className="mb-2 block">Class Name *</Label>
               <Input
                 id="className"
                 value={formData.className}

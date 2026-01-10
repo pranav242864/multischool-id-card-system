@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Bell, Calendar, FileText, ExternalLink, Loader2, Users } from 'lucide-react';
-import { noticeAPI, APIError } from '../../utils/api';
+import { noticeAPI, APIError, getCurrentUser } from '../../utils/api';
 import { Badge } from '../ui/badge';
 
 interface Notice {
@@ -36,6 +36,27 @@ export function ManageNotices() {
           // For teachers, show all notices where they are in targetTeacherIds
           // The backend query already filters this, so we just use the response
           setNotices(response.data);
+          
+          // Mark notices as viewed by updating the last viewed timestamp
+          const currentUser = getCurrentUser();
+          if (currentUser && response.data.length > 0) {
+            // Find the most recent notice timestamp
+            const latestNotice = response.data.reduce((latest: any, notice: any) => {
+              if (!notice.createdAt) return latest;
+              const noticeTime = new Date(notice.createdAt).getTime();
+              const latestTime = latest ? new Date(latest.createdAt).getTime() : 0;
+              return noticeTime > latestTime ? notice : latest;
+            }, null);
+            
+            if (latestNotice && latestNotice.createdAt) {
+              const key = `lastViewedNotices_teacher_${currentUser.email || ''}`;
+              localStorage.setItem(key, new Date(latestNotice.createdAt).getTime().toString());
+            }
+          } else if (currentUser) {
+            // If no notices, mark current time as viewed
+            const key = `lastViewedNotices_teacher_${currentUser.email || ''}`;
+            localStorage.setItem(key, Date.now().toString());
+          }
         }
       } catch (err) {
         const apiError = err as APIError;

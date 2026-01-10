@@ -86,15 +86,15 @@ export function AddSessionModal({ isOpen, onClose, schoolId, onSave }: AddSessio
         </DialogHeader>
 
         {error && (
-          <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+          <div className="p-3 bg-red-50 border border-red-200 rounded-md mt-4">
             <p className="text-sm text-red-600">{error}</p>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-6 mt-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="md:col-span-2">
-              <Label htmlFor="sessionName">Session Name *</Label>
+              <Label htmlFor="sessionName" className="mb-2 block">Session Name *</Label>
               <Input
                 id="sessionName"
                 value={formData.sessionName}
@@ -106,7 +106,7 @@ export function AddSessionModal({ isOpen, onClose, schoolId, onSave }: AddSessio
             </div>
 
             <div>
-              <Label htmlFor="startDate">Start Date *</Label>
+              <Label htmlFor="startDate" className="mb-2 block">Start Date *</Label>
               <Input
                 id="startDate"
                 type="date"
@@ -118,7 +118,7 @@ export function AddSessionModal({ isOpen, onClose, schoolId, onSave }: AddSessio
             </div>
 
             <div>
-              <Label htmlFor="endDate">End Date *</Label>
+              <Label htmlFor="endDate" className="mb-2 block">End Date *</Label>
               <Input
                 id="endDate"
                 type="date"

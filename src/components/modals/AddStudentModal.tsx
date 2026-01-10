@@ -145,13 +145,13 @@ export function AddStudentModal({ isOpen, onClose, student, selectedClass, onSav
         </DialogHeader>
 
         {error && (
-          <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+          <div className="p-3 bg-red-50 border border-red-200 rounded-md mt-4">
             <p className="text-sm text-red-600">{error}</p>
           </div>
         )}
 
         {selectedClass && (
-          <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
+          <div className="p-3 bg-blue-50 border border-blue-200 rounded-md mt-4">
             <p className="text-sm text-blue-600">
               <strong>Class:</strong> {selectedClass.className}
               {selectedClass.frozen && <span className="ml-2 text-orange-600">(Frozen - modifications not allowed)</span>}
@@ -159,11 +159,11 @@ export function AddStudentModal({ isOpen, onClose, student, selectedClass, onSav
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-6 mt-4">
           {/* Basic Information */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="admissionNo">Admission Number *</Label>
+              <Label htmlFor="admissionNo" className="mb-2 block">Admission Number *</Label>
               <Input
                 id="admissionNo"
                 value={formData.admissionNo}
@@ -175,7 +175,7 @@ export function AddStudentModal({ isOpen, onClose, student, selectedClass, onSav
             </div>
 
             <div>
-              <Label htmlFor="dob">Date of Birth *</Label>
+              <Label htmlFor="dob" className="mb-2 block">Date of Birth *</Label>
               <Input
                 id="dob"
                 type="date"
@@ -187,7 +187,7 @@ export function AddStudentModal({ isOpen, onClose, student, selectedClass, onSav
             </div>
 
             <div className="md:col-span-2">
-              <Label htmlFor="name">Full Name *</Label>
+              <Label htmlFor="name" className="mb-2 block">Full Name *</Label>
               <Input
                 id="name"
                 value={formData.name}
@@ -199,7 +199,7 @@ export function AddStudentModal({ isOpen, onClose, student, selectedClass, onSav
             </div>
 
             <div>
-              <Label htmlFor="aadhaar">Aadhaar Number (Optional)</Label>
+              <Label htmlFor="aadhaar" className="mb-2 block">Aadhaar Number (Optional)</Label>
               <Input
                 id="aadhaar"
                 value={formData.aadhaar}
@@ -212,7 +212,7 @@ export function AddStudentModal({ isOpen, onClose, student, selectedClass, onSav
             </div>
 
             <div>
-              <Label htmlFor="photoUrl">Photo URL (Optional)</Label>
+              <Label htmlFor="photoUrl" className="mb-2 block">Photo URL (Optional)</Label>
               <Input
                 id="photoUrl"
                 value={formData.photoUrl}
@@ -225,11 +225,11 @@ export function AddStudentModal({ isOpen, onClose, student, selectedClass, onSav
           </div>
 
           {/* Parent Information */}
-          <div className="space-y-4">
-            <h3 className="text-gray-900 font-semibold">Parent Information</h3>
+          <div className="space-y-4 mt-6">
+            <h3 className="text-gray-900 font-semibold mb-4">Parent Information</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="fatherName">Father's Name *</Label>
+                <Label htmlFor="fatherName" className="mb-2 block">Father's Name *</Label>
                 <Input
                   id="fatherName"
                   value={formData.fatherName}
@@ -241,7 +241,7 @@ export function AddStudentModal({ isOpen, onClose, student, selectedClass, onSav
               </div>
 
               <div>
-                <Label htmlFor="motherName">Mother's Name *</Label>
+                <Label htmlFor="motherName" className="mb-2 block">Mother's Name *</Label>
                 <Input
                   id="motherName"
                   value={formData.motherName}
@@ -255,11 +255,11 @@ export function AddStudentModal({ isOpen, onClose, student, selectedClass, onSav
           </div>
 
           {/* Contact Information */}
-          <div className="space-y-4">
-            <h3 className="text-gray-900 font-semibold">Contact Information</h3>
+          <div className="space-y-4 mt-6">
+            <h3 className="text-gray-900 font-semibold mb-4">Contact Information</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="mobile">Mobile Number *</Label>
+                <Label htmlFor="mobile" className="mb-2 block">Mobile Number *</Label>
                 <Input
                   id="mobile"
                   type="tel"
@@ -274,7 +274,7 @@ export function AddStudentModal({ isOpen, onClose, student, selectedClass, onSav
               </div>
 
               <div className="md:col-span-2">
-                <Label htmlFor="address">Address *</Label>
+                <Label htmlFor="address" className="mb-2 block">Address *</Label>
                 <Textarea
                   id="address"
                   value={formData.address}

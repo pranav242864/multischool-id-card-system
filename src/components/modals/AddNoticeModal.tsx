@@ -216,14 +216,14 @@ export function AddNoticeModal({ isOpen, onClose, onSave, loading = false }: Add
         </DialogHeader>
 
         {error && (
-          <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+          <div className="p-3 bg-red-50 border border-red-200 rounded-md mt-4">
             <p className="text-sm text-red-600">{error}</p>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-6 mt-4">
           <div>
-            <Label htmlFor="title">Notice Title *</Label>
+            <Label htmlFor="title" className="mb-2 block">Notice Title *</Label>
             <Input
               id="title"
               value={formData.title}
@@ -235,7 +235,7 @@ export function AddNoticeModal({ isOpen, onClose, onSave, loading = false }: Add
           </div>
 
           <div>
-            <Label htmlFor="description">Notice Content *</Label>
+            <Label htmlFor="description" className="mb-2 block">Notice Content *</Label>
             <Textarea
               id="description"
               value={formData.description}
@@ -249,7 +249,7 @@ export function AddNoticeModal({ isOpen, onClose, onSave, loading = false }: Add
           </div>
 
           <div>
-            <Label>Target Admins *</Label>
+            <Label className="mb-2 block">Target Admins *</Label>
             <Popover open={isDropdownOpen} onOpenChange={setIsDropdownOpen} modal={false}>
               <PopoverTrigger asChild>
                 <Button
@@ -350,7 +350,7 @@ export function AddNoticeModal({ isOpen, onClose, onSave, loading = false }: Add
           </div>
 
           <div>
-            <Label>Attachments (Optional)</Label>
+            <Label className="mb-2 block">Attachments (Optional)</Label>
             <div className="mt-2 space-y-2">
               <input
                 type="file"
