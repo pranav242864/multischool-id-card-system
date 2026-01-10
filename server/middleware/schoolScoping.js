@@ -86,6 +86,46 @@ const schoolScoping = (req, res, next) => {
       return next();
     }
     
+    // Special case: Template creation route - schoolId can come from req.body
+    const isTemplateCreationRoute = req.method === 'POST' && 
+      (urlToCheck === '/api/v1/templates' || 
+       urlToCheck.endsWith('/templates') ||
+       urlToCheck.includes('/templates') && !urlToCheck.includes('/templates/'));
+    
+    if (isTemplateCreationRoute) {
+      // For template creation, schoolId can be in req.body (for Superadmin) or will come from JWT (for School Admin)
+      // If schoolId is in body but not in query, copy it to query so getSchoolIdForOperation can find it
+      if (req.body?.schoolId && !req.query?.schoolId) {
+        req.query.schoolId = req.body.schoolId;
+      }
+      // Controller will validate and use getSchoolIdForOperation which checks query
+      req.schoolId = req.query?.schoolId || req.body?.schoolId || null;
+      req.schoolFilter = req.query?.schoolId || req.body?.schoolId ? { schoolId: req.query?.schoolId || req.body?.schoolId } : {};
+      return next();
+    }
+    
+    // Special case: Template routes (GET/PATCH/DELETE) - For Superadmin, no schoolId required
+    // Controller will validate template ownership and extract schoolId from the template itself
+    // Match GET/PATCH/DELETE to paths like /api/v1/templates/:id (exclude special routes)
+    const allPaths = [urlToCheck, fullPath, constructedPath].filter(Boolean);
+    const hasTemplatePath = allPaths.some(path => path.includes('/templates/'));
+    const isSpecialRoute = allPaths.some(path => 
+      path.includes('/templates/active') || 
+      path.includes('/templates/download-excel') ||
+      path.endsWith('/download-excel')
+    );
+    const isTemplateByIdRoute = (req.method === 'GET' || req.method === 'PATCH' || req.method === 'DELETE') && 
+      hasTemplatePath && 
+      !isSpecialRoute;
+    
+    if (isTemplateByIdRoute) {
+      // For Superadmin template operations (get/update/delete), no schoolId is required
+      // Controller will check template ownership and use the template's schoolId
+      req.schoolId = null;
+      req.schoolFilter = {};
+      return next();
+    }
+    
     // For all other routes (including POST/PATCH/DELETE and non-dashboard GET routes),
     // SUPERADMIN must provide schoolId in query parameter to scope the operation
     // This ensures mutations are always scoped to a specific school

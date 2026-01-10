@@ -309,10 +309,12 @@ export const templateAPI = {
   },
 
   // Get template by ID
-  getTemplateById: async (templateId: string) => {
+  getTemplateById: async (templateId: string, schoolId?: string) => {
+    // For Superadmin, schoolId is not required - controller validates from template itself
     return apiRequest<{ success: boolean; data: any }>(
       `/templates/${templateId}`,
-      { method: 'GET' }
+      { method: 'GET' },
+      schoolId ? { schoolId } : undefined
     );
   },
 
@@ -349,18 +351,21 @@ export const templateAPI = {
   updateTemplate: async (templateId: string, templateData: {
     name?: string;
     layoutConfig?: any;
+    dataTags?: string[];
     sessionId?: string;
     classId?: string;
     isActive?: boolean;
     schoolId?: string;
   }) => {
+    // For Superadmin, schoolId is not required - controller validates from template itself
+    // Only pass schoolId as query param if provided (for School Admin)
     return apiRequest<{ success: boolean; data: any; message: string }>(
       `/templates/${templateId}`,
       {
         method: 'PATCH',
         body: JSON.stringify(templateData),
       },
-      { schoolId: templateData.schoolId }
+      templateData.schoolId ? { schoolId: templateData.schoolId } : undefined
     );
   },
 

@@ -223,7 +223,7 @@ exports.getTemplate = asyncHandler(async (req, res) => {
 // @route   PATCH /api/v1/templates/:id
 // @access  Private - SUPERADMIN, SCHOOLADMIN
 exports.updateTemplate = asyncHandler(async (req, res) => {
-  const { name, layoutConfig, isActive, sessionId, classId } = req.body;
+  const { name, layoutConfig, dataTags, isActive, sessionId, classId } = req.body;
 
   const template = await Template.findById(req.params.id);
 
@@ -250,6 +250,28 @@ exports.updateTemplate = asyncHandler(async (req, res) => {
 
   if (layoutConfig !== undefined) {
     template.layoutConfig = layoutConfig;
+  }
+
+  // Update dataTags if provided (extract from layoutConfig.fields if not explicitly provided)
+  if (dataTags !== undefined && Array.isArray(dataTags)) {
+    // Validate data tags against whitelist
+    const tagValidation = validateTemplateTags(dataTags, template.type);
+    if (!tagValidation.valid) {
+      return res.status(400).json({
+        success: false,
+        message: tagValidation.message
+      });
+    }
+    template.dataTags = dataTags;
+  } else if (layoutConfig?.fields && Array.isArray(layoutConfig.fields)) {
+    // Extract dataTags from layoutConfig.fields if dataTags not provided
+    const extractedTags = layoutConfig.fields.map((field: any) => field.tag).filter(Boolean);
+    if (extractedTags.length > 0) {
+      const tagValidation = validateTemplateTags(extractedTags, template.type);
+      if (tagValidation.valid) {
+        template.dataTags = extractedTags;
+      }
+    }
   }
 
   if (sessionId !== undefined) {
@@ -282,18 +304,24 @@ exports.updateTemplate = asyncHandler(async (req, res) => {
 
   await template.save();
 
+  // Reload template from database to ensure we return the latest data
+  const updatedTemplate = await Template.findById(template._id)
+    .populate('schoolId', 'name')
+    .populate('sessionId', 'sessionName');
+
   // Audit log: template updated
   await logAudit({
     action: 'UPDATE_TEMPLATE',
     entityType: 'TEMPLATE',
-    entityId: id,
+    entityId: template._id.toString(),
     req,
     metadata: {}
   });
 
   res.status(200).json({
     success: true,
-    data: template
+    message: 'Template updated successfully',
+    data: updatedTemplate
   });
 });
 
