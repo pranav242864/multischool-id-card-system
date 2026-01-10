@@ -91,15 +91,15 @@ export function AddSchoolModal({ isOpen, onClose, school, onSave }: AddSchoolMod
         </DialogHeader>
 
         {error && (
-          <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+          <div className="p-3 bg-red-50 border border-red-200 rounded-md mt-4">
             <p className="text-sm text-red-600">{error}</p>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-6 mt-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="md:col-span-2">
-              <Label htmlFor="name">School Name *</Label>
+              <Label htmlFor="name" className="mb-2 block">School Name *</Label>
               <Input
                 id="name"
                 value={formData.name}
@@ -111,7 +111,7 @@ export function AddSchoolModal({ isOpen, onClose, school, onSave }: AddSchoolMod
             </div>
 
             <div className="md:col-span-2">
-              <Label htmlFor="address">Address *</Label>
+              <Label htmlFor="address" className="mb-2 block">Address *</Label>
               <Input
                 id="address"
                 value={formData.address}
@@ -123,7 +123,7 @@ export function AddSchoolModal({ isOpen, onClose, school, onSave }: AddSchoolMod
             </div>
 
             <div className="md:col-span-2">
-              <Label htmlFor="contactEmail">Contact Email *</Label>
+              <Label htmlFor="contactEmail" className="mb-2 block">Contact Email *</Label>
               <Input
                 id="contactEmail"
                 type="email"

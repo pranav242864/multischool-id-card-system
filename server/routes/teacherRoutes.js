@@ -26,8 +26,8 @@ router.get('/', requireRole('SUPERADMIN', 'SCHOOLADMIN', 'TEACHER'), getTeachers
 router.patch('/:id', requireRole('SUPERADMIN', 'SCHOOLADMIN', 'TEACHER'), updateTeacher);
 
 // DELETE /api/v1/teachers/:id - Delete a teacher
-// Only SUPERADMIN can delete teachers
-router.delete('/:id', requireRole('SUPERADMIN'), deleteTeacher);
+// SUPERADMIN and SCHOOLADMIN can delete teachers
+router.delete('/:id', requireRole('SUPERADMIN', 'SCHOOLADMIN'), deleteTeacher);
 
 // POST /api/v1/teachers/bulk-delete - Bulk delete teachers
 // Only SUPERADMIN can bulk delete teachers

@@ -143,14 +143,13 @@ export function ManageClasses() {
       render: (cls) => {
         if (cls.frozen) {
           return (
-            <Badge variant="secondary" className="bg-blue-500 text-white">
-              <Snowflake className="w-3 h-3 mr-1" />
-              Frozen
+            <Badge className="text-white border-transparent" style={{ backgroundColor: '#dc2626' }}>
+              Inactive
             </Badge>
           );
         }
         return (
-          <Badge variant="default" className="bg-green-600 text-white">
+          <Badge className="text-white border-transparent" style={{ backgroundColor: '#16a34a' }}>
             Active
           </Badge>
         );

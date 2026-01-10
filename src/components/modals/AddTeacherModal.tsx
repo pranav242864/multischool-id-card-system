@@ -139,13 +139,13 @@ export function AddTeacherModal({ isOpen, onClose, teacher, classes, onSave }: A
         </DialogHeader>
 
         {error && (
-          <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+          <div className="p-3 bg-red-50 border border-red-200 rounded-md mt-4">
             <p className="text-sm text-red-600">{error}</p>
           </div>
         )}
 
         {!teacher && (
-          <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+          <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md mt-4">
             <p className="text-sm text-yellow-600">
               <strong>Note:</strong> Teacher creation requires an existing User ID. 
               School Admins cannot create users directly. Use bulk import or contact Superadmin to create teacher users.
@@ -153,11 +153,11 @@ export function AddTeacherModal({ isOpen, onClose, teacher, classes, onSave }: A
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-6 mt-4">
           {/* Basic Information */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="md:col-span-2">
-              <Label htmlFor="name">Name *</Label>
+              <Label htmlFor="name" className="mb-2 block">Name *</Label>
               <Input
                 id="name"
                 value={formData.name}
@@ -171,7 +171,7 @@ export function AddTeacherModal({ isOpen, onClose, teacher, classes, onSave }: A
             {!teacher && (
               <>
                 <div>
-                  <Label htmlFor="email">Email *</Label>
+                  <Label htmlFor="email" className="mb-2 block">Email *</Label>
                   <Input
                     id="email"
                     type="email"
@@ -184,7 +184,7 @@ export function AddTeacherModal({ isOpen, onClose, teacher, classes, onSave }: A
                 </div>
 
                 <div>
-                  <Label htmlFor="userId">User ID *</Label>
+                  <Label htmlFor="userId" className="mb-2 block">User ID *</Label>
                   <Input
                     id="userId"
                     value={formData.userId}
@@ -202,7 +202,7 @@ export function AddTeacherModal({ isOpen, onClose, teacher, classes, onSave }: A
 
             {teacher && (
               <div>
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email" className="mb-2 block">Email</Label>
                 <Input
                   id="email"
                   type="email"
@@ -215,7 +215,7 @@ export function AddTeacherModal({ isOpen, onClose, teacher, classes, onSave }: A
             )}
 
             <div>
-              <Label htmlFor="mobile">Mobile Number *</Label>
+              <Label htmlFor="mobile" className="mb-2 block">Mobile Number *</Label>
               <Input
                 id="mobile"
                 type="tel"
@@ -230,7 +230,7 @@ export function AddTeacherModal({ isOpen, onClose, teacher, classes, onSave }: A
             </div>
 
             <div>
-              <Label htmlFor="classId">Assigned Class</Label>
+              <Label htmlFor="classId" className="mb-2 block">Assigned Class</Label>
               <Select
                 value={formData.classId}
                 onValueChange={(value) => setFormData({ ...formData, classId: value === 'none' ? '' : value })}
@@ -251,7 +251,7 @@ export function AddTeacherModal({ isOpen, onClose, teacher, classes, onSave }: A
             </div>
 
             <div className="md:col-span-2">
-              <Label htmlFor="photoUrl">Photo URL (Optional)</Label>
+              <Label htmlFor="photoUrl" className="mb-2 block">Photo URL (Optional)</Label>
               <Input
                 id="photoUrl"
                 value={formData.photoUrl}

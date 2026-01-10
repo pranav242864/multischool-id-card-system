@@ -88,7 +88,7 @@ export function ChangePasswordModal({ isOpen, onClose, school }: ChangePasswordM
 
           {/* New Password */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
               New Password
             </label>
             <div className="relative">
@@ -116,7 +116,7 @@ export function ChangePasswordModal({ isOpen, onClose, school }: ChangePasswordM
 
           {/* Confirm Password */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
               Confirm Password
             </label>
             <div className="relative">

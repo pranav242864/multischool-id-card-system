@@ -54,6 +54,40 @@ export function ManageNotices() {
               return createdById?.toString() === currentUserId.toString();
             });
             setNotices(filteredNotices);
+            
+            // Mark notices as viewed by updating the last viewed timestamp
+            // Get received notices (notices where current user is in targetAdminIds)
+            const receivedNotices = response.data.filter((notice: any) => {
+              const targetAdminIds = notice.targetAdminIds || [];
+              const adminIds = Array.isArray(targetAdminIds) 
+                ? targetAdminIds.map((admin: any) => {
+                    if (typeof admin === 'object' && admin !== null) {
+                      return admin._id || admin.id || admin;
+                    }
+                    return admin;
+                  }).map((id: any) => id?.toString())
+                : [];
+              return adminIds.includes(currentUserId.toString());
+            });
+            
+            // Find the most recent received notice timestamp
+            if (receivedNotices.length > 0) {
+              const latestNotice = receivedNotices.reduce((latest: any, notice: any) => {
+                if (!notice.createdAt) return latest;
+                const noticeTime = new Date(notice.createdAt).getTime();
+                const latestTime = latest ? new Date(latest.createdAt).getTime() : 0;
+                return noticeTime > latestTime ? notice : latest;
+              }, null);
+              
+              if (latestNotice && latestNotice.createdAt) {
+                const key = `lastViewedNotices_schooladmin_${currentUser.email || ''}`;
+                localStorage.setItem(key, new Date(latestNotice.createdAt).getTime().toString());
+              }
+            } else {
+              // If no received notices, mark current time as viewed
+              const key = `lastViewedNotices_schooladmin_${currentUser.email || ''}`;
+              localStorage.setItem(key, Date.now().toString());
+            }
           } else {
             setNotices([]);
           }

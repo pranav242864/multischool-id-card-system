@@ -182,11 +182,11 @@ export function AddNoticeModalForTeachers({ isOpen, onClose, onSave, loading = f
           <DialogTitle>Add New Notice</DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} className="mt-4">
           <div className="space-y-4">
             {/* Title */}
             <div>
-              <Label htmlFor="title">
+              <Label htmlFor="title" className="mb-2 block">
                 Notice Title <span className="text-red-500">*</span>
               </Label>
               <Input
@@ -201,7 +201,7 @@ export function AddNoticeModalForTeachers({ isOpen, onClose, onSave, loading = f
 
             {/* Description */}
             <div>
-              <Label htmlFor="description">
+              <Label htmlFor="description" className="mb-2 block">
                 Notice Content <span className="text-red-500">*</span>
               </Label>
               <Textarea
@@ -217,7 +217,7 @@ export function AddNoticeModalForTeachers({ isOpen, onClose, onSave, loading = f
 
             {/* Target Teachers */}
             <div>
-              <Label>
+              <Label className="mb-2 block">
                 Target Teachers <span className="text-red-500">*</span>
               </Label>
               <Popover open={isDropdownOpen} onOpenChange={setIsDropdownOpen} modal={false}>
@@ -248,28 +248,34 @@ export function AddNoticeModalForTeachers({ isOpen, onClose, onSave, loading = f
                     <div className="p-4 text-sm text-gray-500">No teachers found</div>
                   ) : (
                     <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                      {teachers.map((teacher) => (
-                        <div
-                          key={teacher.userId}
-                          className="flex items-center space-x-2 p-2 hover:bg-gray-50 rounded cursor-pointer"
-                          onClick={() => toggleTeacher(teacher.userId)}
-                        >
-                          <Checkbox
-                            checked={selectedTeacherIds.has(teacher.userId)}
-                            onCheckedChange={() => toggleTeacher(teacher.userId)}
-                          />
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm font-medium text-gray-900 truncate">
-                              {teacher.name}
+                      {teachers.map((teacher) => {
+                        const isSelected = selectedTeacherIds.has(teacher.userId);
+                        return (
+                          <div
+                            key={teacher.userId}
+                            className="flex items-center space-x-2 p-2 hover:bg-gray-50 rounded cursor-pointer"
+                            onClick={() => toggleTeacher(teacher.userId)}
+                          >
+                            <div 
+                              className="pointer-events-none"
+                            >
+                              <Checkbox
+                                checked={isSelected}
+                              />
                             </div>
-                            {teacher.email && (
-                              <div className="text-xs text-gray-500 truncate">
-                                {teacher.email}
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-medium text-gray-900 truncate">
+                                {teacher.name}
                               </div>
-                            )}
+                              {teacher.email && (
+                                <div className="text-xs text-gray-500 truncate">
+                                  {teacher.email}
+                                </div>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </PopoverContent>
@@ -302,7 +308,7 @@ export function AddNoticeModalForTeachers({ isOpen, onClose, onSave, loading = f
 
             {/* Attachments */}
             <div>
-              <Label>Attachments (Optional)</Label>
+              <Label className="mb-2 block">Attachments (Optional)</Label>
               <div className="mt-2 space-y-2">
                 <input
                   type="file"

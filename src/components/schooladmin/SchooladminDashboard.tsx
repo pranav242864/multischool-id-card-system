@@ -63,7 +63,7 @@ export function SchooladminDashboard({ onNavigate }: SchooladminDashboardProps) 
                   }).map((id: any) => id?.toString())
                 : [];
               return adminIds.includes(currentUserId.toString());
-            }).slice(0, 3); // Show latest 3
+            });
             
             // Sent notices: notices created by current school admin (sent to teachers)
             const sent = noticesResponse.data.filter((notice: any) => {
@@ -75,7 +75,7 @@ export function SchooladminDashboard({ onNavigate }: SchooladminDashboardProps) 
                 createdById = notice.createdBy._id || notice.createdBy.id;
               }
               return createdById?.toString() === currentUserId.toString();
-            }).slice(0, 3); // Show latest 3
+            });
             
             setReceivedNotices(received);
             setSentNotices(sent);
@@ -207,9 +207,9 @@ export function SchooladminDashboard({ onNavigate }: SchooladminDashboardProps) 
       {/* Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Received Notices */}
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h2 className="text-gray-900 mb-4">Received Notices</h2>
-          <div className="space-y-4 max-h-[500px] overflow-y-auto">
+        <div className="bg-white rounded-lg border border-gray-200 p-6 flex flex-col">
+          <h2 className="text-gray-900 mb-4 flex-shrink-0">Received Notices</h2>
+          <div className="space-y-4 overflow-y-auto flex-1 min-h-0" style={{ maxHeight: 'calc(100vh - 550px)' }}>
             {receivedNotices.length === 0 ? (
               <p className="text-gray-500 text-sm">No received notices</p>
             ) : (
@@ -269,9 +269,9 @@ export function SchooladminDashboard({ onNavigate }: SchooladminDashboardProps) 
         </div>
 
         {/* Sent Notices */}
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h2 className="text-gray-900 mb-4">Sent Notices</h2>
-          <div className="space-y-4 max-h-[500px] overflow-y-auto">
+        <div className="bg-white rounded-lg border border-gray-200 p-6 flex flex-col">
+          <h2 className="text-gray-900 mb-4 flex-shrink-0">Sent Notices</h2>
+          <div className="space-y-4 overflow-y-auto flex-1 min-h-0" style={{ maxHeight: 'calc(100vh - 550px)' }}>
             {sentNotices.length === 0 ? (
               <p className="text-gray-500 text-sm">No sent notices</p>
             ) : (

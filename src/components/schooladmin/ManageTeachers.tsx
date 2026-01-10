@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { DataTable, Column } from '../ui/DataTable';
 import { Button } from '../ui/button';
-import { Plus, Edit, Trash2, UserCircle, School, AlertCircle } from 'lucide-react';
+import { Plus, Edit, Trash2, UserCircle, School, AlertCircle, Loader2 } from 'lucide-react';
 import { Badge } from '../ui/badge';
-import { teacherAPI, classAPI, APIError, getUserRole } from '../../utils/api';
+import { teacherAPI, classAPI, APIError } from '../../utils/api';
 import { AddTeacherModal } from '../modals/AddTeacherModal';
 
 interface Teacher {
@@ -31,9 +31,7 @@ export function ManageTeachers() {
   const [updating, setUpdating] = useState(false);
   const [classes, setClasses] = useState<any[]>([]);
 
-  // Check user role for DELETE button visibility
-  const userRole = getUserRole();
-  const canDelete = userRole === 'SUPERADMIN' || userRole === 'superadmin';
+  // School admin can delete teachers
 
   // Fetch classes on mount to check active session
   useEffect(() => {
@@ -98,11 +96,6 @@ export function ManageTeachers() {
   }, []);
 
   const handleDelete = async (teacherId: string) => {
-    if (!canDelete) {
-      setError('Only Superadmin can delete teachers');
-      return;
-    }
-
     if (!confirm('Are you sure you want to delete this teacher?')) {
       return;
     }
@@ -218,23 +211,16 @@ export function ManageTeachers() {
             >
               <Edit className="w-4 h-4" />
             </Button>
-            {canDelete && (
-              <Button
-                variant="ghost"
-                size="sm"
-                title="Delete"
-                onClick={() => handleDelete(teacherId)}
-                className="text-red-600 hover:text-red-700"
-                disabled={isDisabled}
-              >
-                {isDeleting ? '...' : <Trash2 className="w-4 h-4" />}
-              </Button>
-            )}
-            {!canDelete && (
-              <span className="text-xs text-gray-400" title="Only Superadmin can delete teachers">
-                Delete (N/A)
-              </span>
-            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              title="Delete"
+              onClick={() => handleDelete(teacherId)}
+              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+              disabled={isDisabled}
+            >
+              {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+            </Button>
           </div>
         );
       },

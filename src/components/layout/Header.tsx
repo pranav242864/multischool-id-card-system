@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { Menu, Bell, ChevronDown, LogOut, User } from 'lucide-react';
 import { Button } from '../ui/button';
 import {
@@ -8,6 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '../ui/dropdown-menu';
+import { noticeAPI, getCurrentUser } from '../../utils/api';
 
 interface HeaderProps {
   user: {
@@ -18,9 +20,12 @@ interface HeaderProps {
   };
   onLogout: () => void;
   onToggleSidebar: () => void;
+  onNavigate?: (view: string) => void;
 }
 
-export function Header({ user, onLogout, onToggleSidebar }: HeaderProps) {
+export function Header({ user, onLogout, onToggleSidebar, onNavigate }: HeaderProps) {
+  const [hasNewNotices, setHasNewNotices] = useState(false);
+
   const getRoleBadge = (role: string) => {
     const colors = {
       superadmin: 'bg-purple-100 text-purple-700',
@@ -28,6 +33,102 @@ export function Header({ user, onLogout, onToggleSidebar }: HeaderProps) {
       teacher: 'bg-green-100 text-green-700',
     };
     return colors[role as keyof typeof colors] || colors.teacher;
+  };
+
+  // Get or set last viewed timestamp from localStorage
+  const getLastViewedTimestamp = (): number => {
+    const key = `lastViewedNotices_${user.role}_${user.email}`;
+    const stored = localStorage.getItem(key);
+    if (stored) {
+      try {
+        return parseInt(stored, 10);
+      } catch {
+        return 0;
+      }
+    }
+    return 0;
+  };
+
+  const setLastViewedTimestamp = (timestamp: number) => {
+    const key = `lastViewedNotices_${user.role}_${user.email}`;
+    localStorage.setItem(key, timestamp.toString());
+  };
+
+  // Check for new notices (only for schooladmin and teacher)
+  useEffect(() => {
+    const checkNewNotices = async () => {
+      // Only check for schooladmin and teacher roles
+      if (user.role !== 'schooladmin' && user.role !== 'teacher') {
+        return;
+      }
+
+      try {
+        const response = await noticeAPI.getNotices();
+        if (response.success && response.data) {
+          const lastViewed = getLastViewedTimestamp();
+          let newNoticesFound = false;
+
+          if (user.role === 'schooladmin') {
+            // For school admin: check received notices (where current user's ID is in targetAdminIds)
+            const currentUser = getCurrentUser();
+            const currentUserId = currentUser?.id;
+            
+            if (!currentUserId) {
+              setHasNewNotices(false);
+              return;
+            }
+
+            const receivedNotices = response.data.filter((notice: any) => {
+              const targetAdminIds = notice.targetAdminIds || [];
+              const adminIds = Array.isArray(targetAdminIds) 
+                ? targetAdminIds.map((admin: any) => {
+                    if (typeof admin === 'object' && admin !== null) {
+                      return admin._id || admin.id || admin;
+                    }
+                    return admin;
+                  }).map((id: any) => id?.toString())
+                : [];
+              return adminIds.includes(currentUserId.toString());
+            });
+
+            // Check if any received notice was created after last viewed timestamp
+            newNoticesFound = receivedNotices.some((notice: any) => {
+              if (!notice.createdAt) return false;
+              const noticeDate = new Date(notice.createdAt).getTime();
+              return noticeDate > lastViewed;
+            });
+          } else if (user.role === 'teacher') {
+            // For teacher: backend already filters notices, so all returned notices are meant for this teacher
+            // Check if any notice was created after last viewed timestamp
+            newNoticesFound = response.data.some((notice: any) => {
+              if (!notice.createdAt) return false;
+              const noticeDate = new Date(notice.createdAt).getTime();
+              return noticeDate > lastViewed;
+            });
+          }
+
+          setHasNewNotices(newNoticesFound);
+        }
+      } catch (err) {
+        // Silently fail - don't show error for notification check
+        setHasNewNotices(false);
+      }
+    };
+
+    checkNewNotices();
+    // Check every 5 minutes for new notices
+    const interval = setInterval(checkNewNotices, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [user.role, user.email]);
+
+  const handleNotificationClick = () => {
+    // Only navigate for schooladmin and teacher
+    if ((user.role === 'schooladmin' || user.role === 'teacher') && onNavigate) {
+      // Mark notices as viewed by updating timestamp to now
+      setLastViewedTimestamp(Date.now());
+      setHasNewNotices(false);
+      onNavigate('notices');
+    }
   };
 
   return (
@@ -54,10 +155,20 @@ export function Header({ user, onLogout, onToggleSidebar }: HeaderProps) {
       {/* Right Side */}
       <div className="flex items-center gap-2 md:gap-4">
         {/* Notifications */}
-        <Button variant="ghost" size="sm" className="relative">
-          <Bell className="w-5 h-5" />
-          <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-        </Button>
+        {(user.role === 'schooladmin' || user.role === 'teacher') && (
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="relative"
+            onClick={handleNotificationClick}
+            title="View notices"
+          >
+            <Bell className="w-5 h-5" />
+            {hasNewNotices && (
+              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+            )}
+          </Button>
+        )}
 
         {/* User Menu */}
         <DropdownMenu>

@@ -211,14 +211,14 @@ export function AddAdminModal({ isOpen, onClose, admin, onSave }: AddAdminModalP
         </DialogHeader>
 
         {error && (
-          <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+          <div className="p-3 bg-red-50 border border-red-200 rounded-md mt-4">
             <p className="text-sm text-red-600">{error}</p>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4 mt-4">
           <div>
-            <Label htmlFor="name">Full Name *</Label>
+            <Label htmlFor="name" className="mb-2 block">Full Name *</Label>
             <Input
               id="name"
               value={formData.name}
@@ -229,7 +229,7 @@ export function AddAdminModal({ isOpen, onClose, admin, onSave }: AddAdminModalP
           </div>
 
           <div>
-            <Label htmlFor="email">Email Address *</Label>
+            <Label htmlFor="email" className="mb-2 block">Email Address *</Label>
             <Input
               id="email"
               type="email"
@@ -241,7 +241,7 @@ export function AddAdminModal({ isOpen, onClose, admin, onSave }: AddAdminModalP
           </div>
 
           <div>
-            <Label htmlFor="phone">Phone Number *</Label>
+            <Label htmlFor="phone" className="mb-2 block">Phone Number *</Label>
             <Input
               id="phone"
               type="tel"
@@ -254,7 +254,7 @@ export function AddAdminModal({ isOpen, onClose, admin, onSave }: AddAdminModalP
 
           {!admin && (
             <div>
-              <Label htmlFor="password">Password *</Label>
+              <Label htmlFor="password" className="mb-2 block">Password *</Label>
               <Input
                 id="password"
                 type="password"
@@ -267,7 +267,7 @@ export function AddAdminModal({ isOpen, onClose, admin, onSave }: AddAdminModalP
           )}
 
           <div>
-            <Label htmlFor="school">Assigned School *</Label>
+            <Label htmlFor="school" className="mb-2 block">Assigned School *</Label>
             {loadingSchools ? (
               <p className="text-gray-500 text-sm mt-1">Loading schools...</p>
             ) : (
