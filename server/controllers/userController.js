@@ -21,13 +21,17 @@ const getUsers = asyncHandler(async (req, res, next) => {
         message: 'Invalid school ID format'
       });
     }
-    filter.schoolId = schoolId;
+    // Explicitly convert to ObjectId for consistent querying
+    filter.schoolId = new mongoose.Types.ObjectId(schoolId);
   }
   if (role) {
     filter.role = role;
   }
   
-  const users = await User.find(filter).select('-passwordHash');
+  const users = await User.find(filter)
+    .select('-passwordHash')
+    .populate('schoolId', 'name address contactEmail')
+    .sort({ createdAt: -1 }); // Sort by newest first
   
   res.status(200).json({
     success: true,
@@ -421,21 +425,80 @@ const createTeacherUserAdmin = asyncHandler(async (req, res, next) => {
 // @route   PUT /api/v1/users/:id
 // @access  Private
 const updateUser = asyncHandler(async (req, res, next) => {
-  const user = await User.findByIdAndUpdate(req.params.id, req.body, {
-    new: true,
-    runValidators: true
-  });
-  
+  const { id: userId } = req.params;
+  const updateData = req.body;
+
+  // Validate ObjectId format
+  if (!mongoose.Types.ObjectId.isValid(userId)) {
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid user ID format'
+    });
+  }
+
+  // Get schoolId from req.user context (standardized)
+  // Superadmin must provide schoolId in query parameter
+  let schoolId;
+  try {
+    schoolId = getSchoolIdForOperation(req);
+  } catch (error) {
+    return res.status(400).json({
+      success: false,
+      message: error.message
+    });
+  }
+
+  // Find user and verify it belongs to the correct school
+  const user = await User.findById(userId);
   if (!user) {
     return res.status(404).json({
       success: false,
-      error: 'User not found'
+      message: 'User not found'
     });
   }
-  
+
+  // SECURITY: Verify user belongs to the correct school (for non-SUPERADMIN users)
+  if (user.role !== 'SUPERADMIN' && user.schoolId) {
+    const userSchoolId = user.schoolId.toString();
+    if (userSchoolId !== schoolId.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: 'User does not belong to your school'
+      });
+    }
+  }
+
+  // SECURITY: Prevent changing role and schoolId
+  if (updateData.role !== undefined) {
+    return res.status(403).json({
+      success: false,
+      message: 'Cannot change user role. Role is immutable.'
+    });
+  }
+
+  if (updateData.schoolId !== undefined && user.role !== 'SUPERADMIN') {
+    return res.status(403).json({
+      success: false,
+      message: 'Cannot change schoolId. School ID is immutable for non-superadmin users.'
+    });
+  }
+
+  // Remove fields that shouldn't be updated directly
+  delete updateData.role;
+  if (user.role !== 'SUPERADMIN') {
+    delete updateData.schoolId;
+  }
+
+  // Update user
+  const updatedUser = await User.findByIdAndUpdate(userId, updateData, {
+    new: true,
+    runValidators: true
+  }).select('-passwordHash');
+
   res.status(200).json({
     success: true,
-    data: user
+    message: 'User updated successfully',
+    data: updatedUser
   });
 });
 
@@ -443,17 +506,62 @@ const updateUser = asyncHandler(async (req, res, next) => {
 // @route   DELETE /api/v1/users/:id
 // @access  Private (Super Admin only)
 const deleteUser = asyncHandler(async (req, res, next) => {
-  const user = await User.findByIdAndDelete(req.params.id);
-  
+  const { id: userId } = req.params;
+
+  // Validate ObjectId format
+  if (!mongoose.Types.ObjectId.isValid(userId)) {
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid user ID format'
+    });
+  }
+
+  // Get schoolId from req.user context (standardized)
+  // Superadmin must provide schoolId in query parameter
+  let schoolId;
+  try {
+    schoolId = getSchoolIdForOperation(req);
+  } catch (error) {
+    return res.status(400).json({
+      success: false,
+      message: error.message
+    });
+  }
+
+  // Find user and verify it belongs to the correct school
+  const user = await User.findById(userId);
   if (!user) {
     return res.status(404).json({
       success: false,
-      error: 'User not found'
+      message: 'User not found'
     });
   }
+
+  // SECURITY: Verify user belongs to the correct school (for non-SUPERADMIN users)
+  if (user.role !== 'SUPERADMIN' && user.schoolId) {
+    const userSchoolId = user.schoolId.toString();
+    if (userSchoolId !== schoolId.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: 'User does not belong to your school'
+      });
+    }
+  }
+
+  // Prevent deleting SUPERADMIN users
+  if (user.role === 'SUPERADMIN') {
+    return res.status(403).json({
+      success: false,
+      message: 'Cannot delete SUPERADMIN users'
+    });
+  }
+
+  // Delete user
+  await User.findByIdAndDelete(userId);
   
   res.status(200).json({
     success: true,
+    message: 'User deleted successfully',
     data: {}
   });
 });

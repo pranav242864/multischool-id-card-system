@@ -69,25 +69,47 @@ export function ManageSchoolAdmins() {
         const response = await adminAPI.getSchoolAdmins(selectedSchoolId);
         if (response.success && response.data) {
           // Map backend user data to frontend SchoolAdmin format
-          // Backend already filters by role and schoolId, but we filter again for safety
+          // Backend already filters by role and schoolId, so we trust those results
+          // Handle both populated (object) and unpopulated (ObjectId) schoolId for mapping
           const mappedAdmins = response.data
             .filter((user: any) => {
-              const userSchoolId = user.schoolId?.toString() || user.schoolId;
-              return user.role === 'SCHOOLADMIN' && userSchoolId === selectedSchoolId;
+              // Only verify role - backend handles schoolId filtering
+              return user.role === 'SCHOOLADMIN';
             })
-            .map((user: any) => ({
-              _id: user._id || user.id,
-              id: user._id || user.id,
-              name: user.name,
-              email: user.email,
-              phone: user.phone || '',
-              school: schools.find(s => (s._id || s.id) === selectedSchoolId)?.name || '',
-              schoolId: user.schoolId,
-              status: (user.status || 'ACTIVE').toLowerCase() as 'active' | 'inactive',
-              createdAt: user.createdAt,
-              joinDate: user.createdAt,
-            }));
+            .map((user: any) => {
+              // Get schoolId value (handle populated or unpopulated)
+              let userSchoolIdValue: any = user.schoolId;
+              if (user.schoolId && typeof user.schoolId === 'object') {
+                // Populated object - extract _id
+                userSchoolIdValue = user.schoolId._id || user.schoolId.id || user.schoolId;
+              }
+              
+              // Get school name from populated object or find from schools array
+              const schoolName = (typeof user.schoolId === 'object' && user.schoolId?.name) 
+                ? user.schoolId.name
+                : (schools.find(s => {
+                    const sId = (s._id || s.id)?.toString();
+                    const uId = userSchoolIdValue?.toString();
+                    return sId === uId;
+                  })?.name || '');
+              
+              return {
+                _id: user._id || user.id,
+                id: user._id || user.id,
+                name: user.name || 'Unknown',
+                email: user.email || '',
+                phone: user.phone || '',
+                school: schoolName || selectedSchool,
+                schoolId: userSchoolIdValue || user.schoolId,
+                status: (user.status || 'ACTIVE').toLowerCase() as 'active' | 'inactive',
+                createdAt: user.createdAt,
+                joinDate: user.createdAt,
+              };
+            });
           setAdmins(mappedAdmins);
+        } else {
+          // If response is not successful or has no data, set empty array
+          setAdmins([]);
         }
       } catch (err) {
         const apiError = err as APIError;
@@ -108,8 +130,71 @@ export function ManageSchoolAdmins() {
     setIsModalOpen(true);
   };
 
-  const handleDelete = (adminId: string) => {
-    // Delete functionality to be implemented
+  const handleDelete = async (adminId: string) => {
+    // Confirm deletion
+    if (!window.confirm('Are you sure you want to delete this admin? This action cannot be undone.')) {
+      return;
+    }
+
+    if (!selectedSchoolId) {
+      setError('Please select a school first');
+      return;
+    }
+
+    setLoadingAdmins(true);
+    setError(null);
+    try {
+      const response = await adminAPI.deleteSchoolAdmin(adminId, selectedSchoolId);
+      
+      if (response.success) {
+        setSuccessMessage('Admin deleted successfully');
+        setTimeout(() => setSuccessMessage(null), 3000);
+        
+        // Refresh the admin list
+        const refreshResponse = await adminAPI.getSchoolAdmins(selectedSchoolId);
+        if (refreshResponse.success && refreshResponse.data) {
+          const mappedAdmins = refreshResponse.data
+            .filter((user: any) => {
+              return user.role === 'SCHOOLADMIN';
+            })
+            .map((user: any) => {
+              let userSchoolIdValue: any = user.schoolId;
+              if (user.schoolId && typeof user.schoolId === 'object') {
+                userSchoolIdValue = user.schoolId._id || user.schoolId.id || user.schoolId;
+              }
+              
+              const schoolName = (typeof user.schoolId === 'object' && user.schoolId?.name) 
+                ? user.schoolId.name
+                : (schools.find(s => {
+                    const sId = (s._id || s.id)?.toString();
+                    const uId = userSchoolIdValue?.toString();
+                    return sId === uId;
+                  })?.name || '');
+              
+              return {
+                _id: user._id || user.id,
+                id: user._id || user.id,
+                name: user.name || 'Unknown',
+                email: user.email || '',
+                phone: user.phone || '',
+                school: schoolName || selectedSchool,
+                schoolId: userSchoolIdValue || user.schoolId,
+                status: (user.status || 'ACTIVE').toLowerCase() as 'active' | 'inactive',
+                createdAt: user.createdAt,
+                joinDate: user.createdAt,
+              };
+            });
+          setAdmins(mappedAdmins);
+        }
+      } else {
+        setError(response.message || 'Failed to delete admin');
+      }
+    } catch (err) {
+      const apiError = err as APIError;
+      setError(apiError.message || 'Failed to delete admin');
+    } finally {
+      setLoadingAdmins(false);
+    }
   };
 
   const handleChangePassword = (adminId: string) => {
@@ -123,37 +208,132 @@ export function ManageSchoolAdmins() {
   const handleAddAdmin = async (newAdmin: SchoolAdmin) => {
     // Admin creation is handled by AddAdminModal
     // This callback is called after successful creation
-    // Refresh the admin list
+    // Always refresh the admin list for the currently selected school
+    setError(null);
+    setSuccessMessage('Admin created successfully');
+    
+    // Clear success message after 3 seconds
+    setTimeout(() => setSuccessMessage(null), 3000);
+    
+    // Refresh the admin list if a school is selected
     if (selectedSchoolId) {
       setLoadingAdmins(true);
-      setError(null);
-      setSuccessMessage('Admin created successfully');
-      
-      // Clear success message after 3 seconds
-      setTimeout(() => setSuccessMessage(null), 3000);
-      
       try {
         const response = await adminAPI.getSchoolAdmins(selectedSchoolId);
         if (response.success && response.data) {
-          // Backend already filters by role and schoolId, but we filter again for safety
+          // Backend already filters by role and schoolId, so we trust those results
+          // Handle both populated (object) and unpopulated (ObjectId) schoolId for mapping
           const mappedAdmins = response.data
             .filter((user: any) => {
-              const userSchoolId = user.schoolId?.toString() || user.schoolId;
-              return user.role === 'SCHOOLADMIN' && userSchoolId === selectedSchoolId;
+              // Only verify role - backend handles schoolId filtering
+              return user.role === 'SCHOOLADMIN';
             })
-            .map((user: any) => ({
-              _id: user._id || user.id,
-              id: user._id || user.id,
-              name: user.name,
-              email: user.email,
-              phone: user.phone || '',
-              school: schools.find(s => (s._id || s.id) === selectedSchoolId)?.name || '',
-              schoolId: user.schoolId,
-              status: (user.status || 'ACTIVE').toLowerCase() as 'active' | 'inactive',
-              createdAt: user.createdAt,
-              joinDate: user.createdAt,
-            }));
+            .map((user: any) => {
+              // Get schoolId value (handle populated or unpopulated)
+              let userSchoolIdValue: any = user.schoolId;
+              if (user.schoolId && typeof user.schoolId === 'object') {
+                // Populated object - extract _id
+                userSchoolIdValue = user.schoolId._id || user.schoolId.id || user.schoolId;
+              }
+              
+              // Get school name from populated object or find from schools array
+              const schoolName = (typeof user.schoolId === 'object' && user.schoolId?.name) 
+                ? user.schoolId.name
+                : (schools.find(s => {
+                    const sId = (s._id || s.id)?.toString();
+                    const uId = userSchoolIdValue?.toString();
+                    return sId === uId;
+                  })?.name || '');
+              
+              return {
+                _id: user._id || user.id,
+                id: user._id || user.id,
+                name: user.name || 'Unknown',
+                email: user.email || '',
+                phone: user.phone || '',
+                school: schoolName || selectedSchool,
+                schoolId: userSchoolIdValue || user.schoolId,
+                status: (user.status || 'ACTIVE').toLowerCase() as 'active' | 'inactive',
+                createdAt: user.createdAt,
+                joinDate: user.createdAt,
+              };
+            });
           setAdmins(mappedAdmins);
+        } else {
+          // If response is not successful or has no data, set empty array
+          setAdmins([]);
+        }
+      } catch (err) {
+        const apiError = err as APIError;
+        setError(apiError.message || 'Failed to refresh admin list');
+      } finally {
+        setLoadingAdmins(false);
+      }
+    } else {
+      // If no school is selected, at least show success message
+      // User will need to select a school to see the new admin
+    }
+  };
+
+  const handleUpdateAdmin = async (updatedAdmin: SchoolAdmin) => {
+    // Admin update is handled by AddAdminModal
+    // This callback is called after successful update
+    // Always refresh the admin list for the currently selected school
+    setError(null);
+    setSuccessMessage('Admin updated successfully');
+    setIsModalOpen(false);
+    setEditingAdmin(null);
+    
+    // Clear success message after 3 seconds
+    setTimeout(() => setSuccessMessage(null), 3000);
+    
+    // Refresh the admin list if a school is selected
+    if (selectedSchoolId) {
+      setLoadingAdmins(true);
+      try {
+        const response = await adminAPI.getSchoolAdmins(selectedSchoolId);
+        if (response.success && response.data) {
+          // Backend already filters by role and schoolId, so we trust those results
+          // Handle both populated (object) and unpopulated (ObjectId) schoolId for mapping
+          const mappedAdmins = response.data
+            .filter((user: any) => {
+              // Only verify role - backend handles schoolId filtering
+              return user.role === 'SCHOOLADMIN';
+            })
+            .map((user: any) => {
+              // Get schoolId value (handle populated or unpopulated)
+              let userSchoolIdValue: any = user.schoolId;
+              if (user.schoolId && typeof user.schoolId === 'object') {
+                // Populated object - extract _id
+                userSchoolIdValue = user.schoolId._id || user.schoolId.id || user.schoolId;
+              }
+              
+              // Get school name from populated object or find from schools array
+              const schoolName = (typeof user.schoolId === 'object' && user.schoolId?.name) 
+                ? user.schoolId.name
+                : (schools.find(s => {
+                    const sId = (s._id || s.id)?.toString();
+                    const uId = userSchoolIdValue?.toString();
+                    return sId === uId;
+                  })?.name || '');
+              
+              return {
+                _id: user._id || user.id,
+                id: user._id || user.id,
+                name: user.name || 'Unknown',
+                email: user.email || '',
+                phone: user.phone || '',
+                school: schoolName || selectedSchool,
+                schoolId: userSchoolIdValue || user.schoolId,
+                status: (user.status || 'ACTIVE').toLowerCase() as 'active' | 'inactive',
+                createdAt: user.createdAt,
+                joinDate: user.createdAt,
+              };
+            });
+          setAdmins(mappedAdmins);
+        } else {
+          // If response is not successful or has no data, set empty array
+          setAdmins([]);
         }
       } catch (err) {
         const apiError = err as APIError;
@@ -162,11 +342,6 @@ export function ManageSchoolAdmins() {
         setLoadingAdmins(false);
       }
     }
-  };
-
-  const handleUpdateAdmin = (updatedAdmin: SchoolAdmin) => {
-    setIsModalOpen(false);
-    setEditingAdmin(null);
   };
 
   if (loading && !selectedSchoolId) {

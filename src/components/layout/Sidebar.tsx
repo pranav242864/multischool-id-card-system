@@ -9,7 +9,8 @@ import {
   Calendar,
   X,
   ChevronLeft,
-  FileSearch
+  FileSearch,
+  Bell
 } from 'lucide-react';
 import { Button } from '../ui/button';
 
@@ -27,6 +28,7 @@ export function Sidebar({ userRole, currentView, onNavigate, isOpen, onToggle }:
     { id: 'schools', label: 'Manage Schools', icon: School },
     { id: 'sessions', label: 'Manage Sessions', icon: Calendar },
     { id: 'admins', label: 'Manage Admins', icon: Users },
+    { id: 'notices', label: 'Notices', icon: Bell },
     { id: 'teachers', label: 'Manage Teachers', icon: UserCircle },
     { id: 'classes', label: 'Manage Classes', icon: GraduationCap },
     { id: 'students', label: 'Manage Students', icon: GraduationCap },
@@ -41,11 +43,13 @@ export function Sidebar({ userRole, currentView, onNavigate, isOpen, onToggle }:
     { id: 'students', label: 'Manage Students', icon: GraduationCap },
     { id: 'templates', label: 'ID Card Templates', icon: FileText },
     { id: 'teachers', label: 'Manage Teachers', icon: UserCircle },
+    { id: 'notices', label: 'Notices', icon: Bell },
     { id: 'bulk', label: 'Bulk Operations', icon: Upload },
   ];
 
   const teacherItems = [
     { id: 'dashboard', label: 'My Class', icon: LayoutDashboard },
+    { id: 'notices', label: 'Notices', icon: Bell },
     { id: 'bulk', label: 'Bulk Operations', icon: Upload },
   ];
 

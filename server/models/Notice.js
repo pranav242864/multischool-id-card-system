@@ -26,7 +26,19 @@ const noticeSchema = new mongoose.Schema({
   schoolId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'School',
-    required: [true, 'School is required'],
+    required: false, // Optional for SUPERADMIN notices targeting specific admins
+    index: true
+  },
+  targetAdminIds: {
+    type: [mongoose.Schema.Types.ObjectId],
+    ref: 'User',
+    default: [], // Array of specific admin user IDs to target (SUPERADMIN -> SCHOOLADMIN)
+    index: true
+  },
+  targetTeacherIds: {
+    type: [mongoose.Schema.Types.ObjectId],
+    ref: 'User',
+    default: [], // Array of specific teacher user IDs to target (SCHOOLADMIN -> TEACHER)
     index: true
   },
   sessionId: {

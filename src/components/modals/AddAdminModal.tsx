@@ -70,17 +70,32 @@ export function AddAdminModal({ isOpen, onClose, admin, onSave }: AddAdminModalP
   }, [isOpen]);
 
   useEffect(() => {
-    if (admin) {
-      // For editing, we'd need to find schoolId from assignedSchool name
-      // For now, reset form when editing (edit functionality not implemented)
+    if (admin && isOpen) {
+      // For editing, populate form with admin data
+      // Find schoolId from admin's schoolId or assignedSchool name
+      let schoolIdForForm = '';
+      if (admin.schoolId) {
+        // If schoolId is an object (populated), extract _id
+        schoolIdForForm = typeof admin.schoolId === 'object' && admin.schoolId._id
+          ? admin.schoolId._id.toString()
+          : admin.schoolId.toString();
+      } else if (admin.assignedSchool && schools.length > 0) {
+        // Find schoolId by name
+        const matchingSchool = schools.find(s => s.name === admin.assignedSchool);
+        if (matchingSchool) {
+          schoolIdForForm = (matchingSchool._id || matchingSchool.id || '').toString();
+        }
+      }
+      
       setFormData({
-        name: admin.name,
-        email: admin.email,
-        phone: admin.phone,
-        password: '',
-        schoolId: '',
+        name: admin.name || '',
+        email: admin.email || '',
+        phone: admin.phone || '',
+        password: '', // Don't pre-fill password for security
+        schoolId: schoolIdForForm,
       });
-    } else {
+    } else if (!admin && isOpen) {
+      // For creating new admin
       setFormData({
         name: '',
         email: '',
@@ -90,53 +105,99 @@ export function AddAdminModal({ isOpen, onClose, admin, onSave }: AddAdminModalP
       });
     }
     setError(null);
-  }, [admin, isOpen]);
+  }, [admin, isOpen, schools]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Only allow creation (not editing) for now
-    if (admin) {
-      setError('Edit functionality not yet implemented');
-      return;
-    }
 
-    // Validate required fields
-    if (!formData.name || !formData.email || !formData.password || !formData.schoolId) {
-      setError('All fields are required');
-      return;
+    // Validate required fields based on create vs edit
+    if (admin) {
+      // Edit mode: name, email, and schoolId are required (password optional)
+      if (!formData.name || !formData.email || !formData.schoolId) {
+        setError('Name, email, and school are required');
+        return;
+      }
+    } else {
+      // Create mode: all fields including password are required
+      if (!formData.name || !formData.email || !formData.password || !formData.schoolId) {
+        setError('All fields are required');
+        return;
+      }
     }
 
     setSubmitting(true);
     setError(null);
 
     try {
-      const response = await adminAPI.createSchoolAdmin({
-        name: formData.name,
-        email: formData.email,
-        password: formData.password,
-        schoolId: formData.schoolId,
-      });
+      if (admin) {
+        // Update existing admin
+        const adminId = admin.id || admin._id;
+        if (!adminId) {
+          setError('Admin ID is required for update');
+          setSubmitting(false);
+          return;
+        }
 
-      if (response.success) {
-        // Call onSave callback with the created admin data
-        onSave({
-          id: response.data.id,
-          name: response.data.name,
-          email: response.data.email,
-          phone: formData.phone,
-          assignedSchool: schools.find(s => (s._id || s.id) === formData.schoolId)?.name || '',
-          status: 'active',
-          createdAt: new Date().toISOString(),
-        });
-        // Close modal only on success
-        onClose();
+        // Get schoolId for query param (required for SUPERADMIN)
+        const schoolIdForQuery = formData.schoolId || 
+          (typeof admin.schoolId === 'object' && admin.schoolId._id 
+            ? admin.schoolId._id.toString() 
+            : admin.schoolId?.toString() || '');
+
+        const response = await adminAPI.updateSchoolAdmin(
+          adminId,
+          {
+            name: formData.name.trim(),
+            email: formData.email.trim(),
+          },
+          schoolIdForQuery
+        );
+
+        if (response.success) {
+          // Call onSave callback with the updated admin data
+          onSave({
+            id: adminId,
+            name: response.data.name || formData.name,
+            email: response.data.email || formData.email,
+            phone: formData.phone,
+            assignedSchool: schools.find(s => (s._id || s.id) === formData.schoolId)?.name || admin.assignedSchool || '',
+            status: admin.status || 'active',
+            createdAt: admin.createdAt || new Date().toISOString(),
+          });
+          // Close modal only on success
+          onClose();
+        } else {
+          setError(response.message || 'Failed to update admin');
+        }
       } else {
-        setError(response.message || 'Failed to create admin');
+        // Create new admin
+        const response = await adminAPI.createSchoolAdmin({
+          name: formData.name.trim(),
+          email: formData.email.trim(),
+          password: formData.password,
+          schoolId: formData.schoolId,
+        });
+
+        if (response.success) {
+          // Call onSave callback with the created admin data
+          onSave({
+            id: response.data.id,
+            name: response.data.name,
+            email: response.data.email,
+            phone: formData.phone,
+            assignedSchool: schools.find(s => (s._id || s.id) === formData.schoolId)?.name || '',
+            status: 'active',
+            createdAt: new Date().toISOString(),
+          });
+          // Close modal only on success
+          onClose();
+        } else {
+          setError(response.message || 'Failed to create admin');
+        }
       }
     } catch (err) {
       const apiError = err as APIError;
-      setError(apiError.message || 'Failed to create admin');
+      setError(apiError.message || (admin ? 'Failed to update admin' : 'Failed to create admin'));
     } finally {
       setSubmitting(false);
     }
