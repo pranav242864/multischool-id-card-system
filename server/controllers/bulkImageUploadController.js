@@ -143,6 +143,21 @@ const bulkUploadImages = [
             const ext = path.extname(filename);
             const admissionNo = path.basename(filename, ext);
             
+            console.log(`[BULK_UPLOAD] Processing file:`, {
+              originalname: file.originalname,
+              filename: file.filename,
+              path: file.path,
+              size: file.size,
+              mimetype: file.mimetype
+            });
+            
+            // Verify file was actually saved
+            if (!file.path || !fs.existsSync(file.path)) {
+              throw new Error(`File was not saved to disk: ${file.originalname}`);
+            }
+            
+            console.log(`[BULK_UPLOAD] File exists at: ${file.path}`);
+            
             // Sanitize admission number (prevent directory traversal)
             if (admissionNo.includes('..') || admissionNo.includes('/') || admissionNo.includes('\\')) {
               throw new Error('Invalid filename format');
@@ -163,9 +178,29 @@ const bulkUploadImages = [
             // Generate public URL
             const photoUrl = `${baseUrl}/uploads/students/${filename}`;
             
+            console.log(`[BULK_UPLOAD] Processing student ${admissionNo}`);
+            console.log(`[BULK_UPLOAD] Generated photoUrl: ${photoUrl}`);
+            console.log(`[BULK_UPLOAD] Filename: ${filename}`);
+            console.log(`[BULK_UPLOAD] File path: ${file.path}`);
+            
             // Update student photoUrl
             student.photoUrl = photoUrl;
+            
+            // Validate before saving
+            try {
+              await student.validate();
+              console.log(`[BULK_UPLOAD] Validation passed for ${admissionNo}`);
+            } catch (validationError) {
+              console.error(`[BULK_UPLOAD] Validation failed for ${admissionNo}:`, validationError.message);
+              console.error(`[BULK_UPLOAD] Validation errors:`, validationError.errors);
+              throw new Error(`Photo URL validation failed: ${validationError.message}`);
+            }
+            
             await student.save();
+            
+            // Verify the photoUrl was actually saved
+            const savedStudent = await Student.findById(student._id).select('photoUrl admissionNo');
+            console.log(`[BULK_UPLOAD] Saved student ${admissionNo} - photoUrl in DB:`, savedStudent?.photoUrl);
             
             results.success++;
           } catch (error) {

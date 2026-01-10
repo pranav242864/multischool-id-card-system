@@ -685,7 +685,7 @@ export function TemplateManagement() {
           : `Template "${templateData.name}" created successfully!`);
         
         // Close editor and reset form
-        setShowEditor(false);
+    setShowEditor(false);
         setEditingTemplateId(null);
         // Clean up image URL
         if (templateData.backgroundImageUrl) {
@@ -1047,8 +1047,8 @@ export function TemplateManagement() {
                     const file = e.target.files?.[0] || null;
                     if (file) {
                       const url = URL.createObjectURL(file);
-                      setTemplateData({
-                        ...templateData,
+                    setTemplateData({
+                      ...templateData,
                         backgroundImage: file,
                         backgroundImageUrl: url,
                       });
@@ -1096,10 +1096,10 @@ export function TemplateManagement() {
                   const isDisabled = (!checked && selectedCount >= 8) || (checked && selectedCount <= 2);
                   
                   return (
-                    <div key={field} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={field}
-                        checked={checked}
+                  <div key={field} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={field}
+                      checked={checked}
                         disabled={isDisabled}
                         onCheckedChange={(value) => {
                           const currentCount = Object.values(templateData.fields).filter(Boolean).length;
@@ -1123,26 +1123,26 @@ export function TemplateManagement() {
                           }
                           
                           setError(null); // Clear any previous errors
-                          setTemplateData({
-                            ...templateData,
+                        setTemplateData({
+                          ...templateData,
                             fields: { ...templateData.fields, [field]: newValue },
                           });
                         }}
-                      />
-                      <label
-                        htmlFor={field}
+                    />
+                    <label
+                      htmlFor={field}
                         onClick={(e) => {
                           if (isDisabled) {
                             e.preventDefault();
                           }
                         }}
                         className={`select-none ${isDisabled ? 'text-gray-400 cursor-not-allowed' : 'text-gray-700 cursor-pointer'}`}
-                      >
-                        {field
-                          .replace(/([A-Z])/g, ' $1')
-                          .replace(/^./, (str) => str.toUpperCase())}
-                      </label>
-                    </div>
+                    >
+                      {field
+                        .replace(/([A-Z])/g, ' $1')
+                        .replace(/^./, (str) => str.toUpperCase())}
+                    </label>
+                  </div>
                   );
                 })}
               </div>

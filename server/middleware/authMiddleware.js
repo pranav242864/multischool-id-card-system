@@ -95,15 +95,16 @@ const authMiddleware = asyncHandler(async (req, res, next) => {
       });
     }
 
-    // STEP 6: Fetch user from database
+    // STEP 6: Fetch user from database (populate schoolId to check school status)
     console.log('[AUTH] STEP 6: Fetching user from database');
     console.log('[AUTH] Searching for user ID:', decoded.user.id);
-    const user = await User.findById(decoded.user.id).select('status role schoolId');
+    const user = await User.findById(decoded.user.id).select('status role schoolId').populate('schoolId');
     console.log('[AUTH] User query result:', user ? {
       _id: user._id?.toString(),
       status: user.status,
       role: user.role,
-      schoolId: user.schoolId?.toString()
+      schoolId: user.schoolId?.toString(),
+      schoolStatus: user.schoolId?.status
     } : 'NOT FOUND');
     
     if (!user) {
@@ -125,6 +126,28 @@ const authMiddleware = asyncHandler(async (req, res, next) => {
         success: false,
         message: 'Account is inactive. Please contact an administrator.'
       });
+    }
+
+    // STEP 7.5: SECURITY - Check if school is active (for non-SUPERADMIN users)
+    if (user.role !== 'SUPERADMIN' && user.role !== 'Superadmin') {
+      console.log('[AUTH] STEP 7.5: Checking school status for non-SUPERADMIN user');
+      if (!user.schoolId) {
+        console.log('[AUTH] ❌ FAIL: Non-SUPERADMIN user has no schoolId');
+        return res.status(401).json({
+          success: false,
+          message: 'User account is missing school association'
+        });
+      }
+      
+      if (user.schoolId.status !== 'active') {
+        console.log('[AUTH] ❌ FAIL: School status is not active:', user.schoolId.status);
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied: Your school account has been deactivated. Please contact the administrator.'
+        });
+      }
+      
+      console.log('[AUTH] ✅ School status check passed:', user.schoolId.status);
     }
 
     // STEP 8: Set req.user

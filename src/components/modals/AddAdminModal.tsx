@@ -130,7 +130,7 @@ export function AddAdminModal({ isOpen, onClose, admin, onSave }: AddAdminModalP
           createdAt: new Date().toISOString(),
         });
         // Close modal only on success
-        onClose();
+    onClose();
       } else {
         setError(response.message || 'Failed to create admin');
       }

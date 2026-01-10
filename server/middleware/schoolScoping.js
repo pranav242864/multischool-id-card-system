@@ -7,9 +7,12 @@
 // - Otherwise require req.user.schoolId
 // - Attach school filter to req (req.schoolFilter or equivalent)
 // - Return error if schoolId missing
+// - SECURITY: Validate school exists and is active for non-SUPERADMIN users (handled by authMiddleware)
+// - SECURITY: Validate school exists and is active for SUPERADMIN when schoolId is provided
 const mongoose = require('mongoose');
+const School = require('../models/School');
 
-const schoolScoping = (req, res, next) => {
+const schoolScoping = async (req, res, next) => {
   // REQUIRE req.user to exist
   if (!req.user) {
     return res.status(401).json({
@@ -37,7 +40,8 @@ const schoolScoping = (req, res, next) => {
       '/api/v1/schools',
       '/api/v1/notices',
       '/api/v1/auth/login-logs',
-      '/api/v1/users'
+      '/api/v1/users',
+      '/api/v1/bulk-export' // Allow bulk export routes (schoolId will be validated in controller)
     ];
     
     // Check if this is a dashboard-level GET route
@@ -141,6 +145,30 @@ const schoolScoping = (req, res, next) => {
       return res.status(400).json({
         success: false,
         message: 'Invalid school ID format'
+      });
+    }
+
+    // SECURITY: Validate school exists and is active when SUPERADMIN specifies schoolId
+    try {
+      const school = await School.findById(req.query.schoolId).select('status');
+      if (!school) {
+        return res.status(404).json({
+          success: false,
+          message: 'School not found'
+        });
+      }
+      
+      if (school.status !== 'active') {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied: The specified school has been deactivated'
+        });
+      }
+    } catch (error) {
+      console.error('[SCHOOL_SCOPING] Error validating school:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Error validating school'
       });
     }
 

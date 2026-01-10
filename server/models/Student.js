@@ -44,7 +44,20 @@ const studentSchema = new mongoose.Schema({
   },
   photoUrl: {
     type: String,
-    match: [/^https?:\/\/.+\.(jpg|jpeg|png|gif)$/i, 'Please enter a valid image URL']
+    // Allow both full URLs and relative paths for uploaded images
+    // Full URLs: http://example.com/path/image.jpg
+    // Relative paths: /uploads/students/image.jpg (will be converted to full URL by backend)
+    validate: {
+      validator: function(v) {
+        if (!v) return true; // Allow empty/undefined
+        // Match full URLs with image extensions
+        const urlPattern = /^https?:\/\/.+\.(jpg|jpeg|png|gif)(\?.*)?$/i;
+        // Match relative paths with image extensions
+        const pathPattern = /^\/uploads\/.+\.(jpg|jpeg|png|gif)(\?.*)?$/i;
+        return urlPattern.test(v) || pathPattern.test(v);
+      },
+      message: 'Please enter a valid image URL or path'
+    }
   },
   classId: {
     type: mongoose.Schema.Types.ObjectId,

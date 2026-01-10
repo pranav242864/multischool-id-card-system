@@ -12,6 +12,7 @@ const healthRoutes = require('./routes/healthRoutes');
 const authRoutes = require('./routes/authRoutes');
 const templateRoutes = require('./routes/templateRoutes');
 const bulkImportRoutes = require('./routes/bulkImportRoutes');
+const bulkExportRoutes = require('./routes/bulkExportRoutes');
 const bulkUploadRoutes = require('./routes/bulkUploadRoutes');
 const sessionRoutes = require('./routes/sessionRoutes');
 const classRoutes = require('./routes/classRoutes');
@@ -68,6 +69,7 @@ app.use('/api/auth', authRoutes); // Public routes: /login, /google, /forgot-pas
 app.use('/api/v1/auth', authRoutes); // Same routes, versioned
 app.use('/api/v1/templates', templateRoutes); // Protected (has authMiddleware in route file)
 app.use('/api/v1/bulk-import', bulkImportRoutes); // Protected (has authMiddleware in route file)
+app.use('/api/v1/bulk-export', bulkExportRoutes); // Protected (has authMiddleware in route file)
 app.use('/api/v1/bulk-upload', bulkUploadRoutes); // Protected (has authMiddleware in route file)
 app.use('/api/v1/classes', classRoutes); // Protected (has authMiddleware in route file)
 app.use('/api/v1/sessions', sessionRoutes); // Protected (has authMiddleware in route file)
