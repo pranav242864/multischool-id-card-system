@@ -11,6 +11,7 @@
 // - SECURITY: Validate school exists and is active for SUPERADMIN when schoolId is provided
 const mongoose = require('mongoose');
 const School = require('../models/School');
+const { isSuperadmin } = require('../utils/roleGuards');
 
 const schoolScoping = async (req, res, next) => {
   // REQUIRE req.user to exist
@@ -130,6 +131,111 @@ const schoolScoping = async (req, res, next) => {
       return next();
     }
     
+    // Special case: Notice operations - For Superadmin, schoolId is optional
+    // Notice creation: When targetAdminIds are provided, notice is system-wide targeting specific admins
+    // Notice update/archive: SUPERADMIN can operate on notices they created (schoolId can be null)
+    const isNoticeRoute = 
+      (urlToCheck === '/api/v1/notices' || 
+       urlToCheck.endsWith('/notices') ||
+       urlToCheck.includes('/notices'));
+    
+    if (isNoticeRoute) {
+      // For notice creation (POST)
+      if (req.method === 'POST') {
+        // Check if this is a FormData request (multipart/form-data)
+        // FormData requests are parsed by multer middleware which runs after this middleware
+        // For SUPERADMIN, allow FormData requests to proceed - controller will validate targetAdminIds after multer parses it
+        // For SCHOOLADMIN, allow FormData requests to proceed - controller will validate targetTeacherIds after multer parses it
+        const contentType = req.headers['content-type'] || '';
+        const isFormDataRequest = contentType.includes('multipart/form-data');
+        
+        if (isFormDataRequest && (isSuperadmin(req.user) || req.user.role === 'SCHOOLADMIN')) {
+          // For FormData requests from SUPERADMIN or SCHOOLADMIN, allow to proceed
+          // Multer will parse the FormData, then controller will check targetAdminIds/targetTeacherIds
+          if (isSuperadmin(req.user)) {
+            req.schoolId = null;
+            req.schoolFilter = {};
+          } else if (req.user.role === 'SCHOOLADMIN') {
+            // For SCHOOLADMIN, set req.schoolId from req.user.schoolId (from JWT token)
+            if (!req.user.schoolId) {
+              return res.status(403).json({
+                success: false,
+                message: 'Access denied: school ID is required'
+              });
+            }
+            req.schoolId = req.user.schoolId;
+            req.schoolFilter = { schoolId: req.user.schoolId };
+          }
+          return next();
+        }
+        
+        // For JSON requests, check targetAdminIds/targetTeacherIds in body (already parsed by express.json)
+        let targetAdminIds = req.body?.targetAdminIds;
+        if (typeof targetAdminIds === 'string') {
+          try {
+            targetAdminIds = JSON.parse(targetAdminIds);
+          } catch (e) {
+            // If parsing fails, treat as empty
+            targetAdminIds = [];
+          }
+        }
+        
+        let targetTeacherIds = req.body?.targetTeacherIds;
+        if (typeof targetTeacherIds === 'string') {
+          try {
+            targetTeacherIds = JSON.parse(targetTeacherIds);
+          } catch (e) {
+            // If parsing fails, treat as empty
+            targetTeacherIds = [];
+          }
+        }
+        
+        // SUPERADMIN: If targetAdminIds are provided, allow notice creation without schoolId
+        // Controller will handle validation and set schoolId to null for system-wide notices
+        if (isSuperadmin(req.user) && targetAdminIds && Array.isArray(targetAdminIds) && targetAdminIds.length > 0) {
+          req.schoolId = null;
+          req.schoolFilter = {};
+          return next();
+        }
+        
+        // SCHOOLADMIN: If targetTeacherIds are provided, use schoolId from req.user.schoolId
+        // Controller will validate that teachers belong to their school
+        if (req.user.role === 'SCHOOLADMIN' && targetTeacherIds && Array.isArray(targetTeacherIds) && targetTeacherIds.length > 0) {
+          // Set req.schoolId from req.user.schoolId (from JWT token)
+          if (!req.user.schoolId) {
+            return res.status(403).json({
+              success: false,
+              message: 'Access denied: school ID is required'
+            });
+          }
+          req.schoolId = req.user.schoolId;
+          req.schoolFilter = { schoolId: req.user.schoolId };
+          return next();
+        }
+        
+        // If schoolId is provided in query, use it
+        if (req.query?.schoolId) {
+          req.schoolId = req.query.schoolId;
+          req.schoolFilter = { schoolId: req.query.schoolId };
+          return next();
+        }
+        
+        // For notice creation without targetAdminIds/targetTeacherIds, require schoolId
+        return res.status(400).json({
+          success: false,
+          message: 'School ID is required for this operation. Alternatively, provide targetAdminIds (SUPERADMIN) or targetTeacherIds (SCHOOLADMIN) to create a targeted notice.'
+        });
+      }
+      
+      // For notice update/archive (PATCH) - SUPERADMIN can operate without schoolId
+      // Controller will check ownership
+      if (req.method === 'PATCH') {
+        req.schoolId = req.query?.schoolId || null;
+        req.schoolFilter = req.query?.schoolId ? { schoolId: req.query.schoolId } : {};
+        return next();
+      }
+    }
+    
     // For all other routes (including POST/PATCH/DELETE and non-dashboard GET routes),
     // SUPERADMIN must provide schoolId in query parameter to scope the operation
     // This ensures mutations are always scoped to a specific school
@@ -175,6 +281,18 @@ const schoolScoping = async (req, res, next) => {
     // Assign to req.schoolId and create filter
     req.schoolId = req.query.schoolId;
     req.schoolFilter = { schoolId: req.query.schoolId };
+    return next();
+  }
+
+  // For notice routes, schoolId should already be set by the notice-specific logic above
+  // Skip the default logic if schoolId is already set (for notices with targetAdminIds/targetTeacherIds)
+  if (req.schoolId !== undefined) {
+    // schoolId was already set by notice-specific logic, just ensure schoolFilter is set
+    if (req.schoolId === null) {
+      req.schoolFilter = {};
+    } else {
+      req.schoolFilter = { schoolId: req.schoolId };
+    }
     return next();
   }
 

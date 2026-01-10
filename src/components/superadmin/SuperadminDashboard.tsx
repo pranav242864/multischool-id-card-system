@@ -170,6 +170,17 @@ export function SuperadminDashboard({ onNavigate }: SuperadminDashboardProps) {
               <div className="text-gray-600">View and manage students</div>
             </div>
           </Button>
+          <Button
+            variant="outline"
+            className="h-auto py-4 flex flex-col items-start gap-2"
+            onClick={() => onNavigate('notices')}
+          >
+            <Bell className="w-5 h-5 text-orange-600" />
+            <div className="text-left">
+              <div className="text-gray-900">Manage Notices</div>
+              <div className="text-gray-600">Create and manage notices</div>
+            </div>
+          </Button>
         </div>
       </div>
 

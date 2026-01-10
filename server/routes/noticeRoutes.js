@@ -15,11 +15,14 @@ const router = express.Router();
 router.use(authMiddleware);
 router.use(schoolScoping);
 
-router.post('/', requireRole('SUPERADMIN', 'SCHOOLADMIN', 'TEACHER'), createNotice);
+// Apply multer middleware (from createNotice array) and handler
+// createNotice is exported as an array [multerMiddleware, handler], Express handles arrays automatically
+// Teachers can only read notices (GET), they cannot create/update/archive
+router.post('/', requireRole('SUPERADMIN', 'SCHOOLADMIN'), ...createNotice);
 router.get('/', requireRole('SUPERADMIN', 'SCHOOLADMIN', 'TEACHER'), getNotices);
 router.get('/:id', requireRole('SUPERADMIN', 'SCHOOLADMIN', 'TEACHER'), getNoticeById);
-router.patch('/:id', requireRole('SUPERADMIN', 'SCHOOLADMIN', 'TEACHER'), updateNotice);
-router.patch('/:id/archive', requireRole('SUPERADMIN', 'SCHOOLADMIN', 'TEACHER'), archiveNotice);
+router.patch('/:id', requireRole('SUPERADMIN', 'SCHOOLADMIN'), updateNotice);
+router.patch('/:id/archive', requireRole('SUPERADMIN', 'SCHOOLADMIN'), archiveNotice);
 
 module.exports = router;
 

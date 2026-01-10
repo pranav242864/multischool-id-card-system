@@ -19,6 +19,20 @@ export const getUserRole = (): string | null => {
   return null;
 };
 
+// Get current user from localStorage (stored after login)
+export const getCurrentUser = (): { id?: string; role?: string; email?: string; name?: string } | null => {
+  const userStr = localStorage.getItem('user');
+  if (userStr) {
+    try {
+      const user = JSON.parse(userStr);
+      return user || null;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+};
+
 // Build query string with role-aware schoolId handling
 const buildQueryString = (params: Record<string, any> = {}): string => {
   const queryParams = new URLSearchParams();
@@ -844,6 +858,47 @@ export const adminAPI = {
       }
     );
   },
+
+  // Update school admin
+  updateSchoolAdmin: async (
+    adminId: string,
+    adminData: {
+      name?: string;
+      email?: string;
+    },
+    schoolId?: string
+  ) => {
+    const queryParams: any = {};
+    if (schoolId) {
+      queryParams.schoolId = schoolId;
+    }
+    
+    return apiRequest<{ success: boolean; data: any; message: string }>(
+      `/users/${adminId}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify({
+          name: adminData.name,
+          email: adminData.email,
+        }),
+      },
+      Object.keys(queryParams).length > 0 ? queryParams : undefined
+    );
+  },
+
+  // Delete school admin
+  deleteSchoolAdmin: async (adminId: string, schoolId?: string) => {
+    const queryParams: any = {};
+    if (schoolId) {
+      queryParams.schoolId = schoolId;
+    }
+    
+    return apiRequest<{ success: boolean; message: string; data?: any }>(
+      `/users/${adminId}`,
+      { method: 'DELETE' },
+      Object.keys(queryParams).length > 0 ? queryParams : undefined
+    );
+  },
 };
 
 // ============================================================================
@@ -1084,6 +1139,8 @@ export const noticeAPI = {
       sessionId?: string;
       attachments?: string[];
       schoolId?: string;
+      targetAdminIds?: string[];
+      targetTeacherIds?: string[];
     },
     attachmentFiles?: File[]
   ) => {
@@ -1096,9 +1153,22 @@ export const noticeAPI = {
       if (noticeData.sessionId) {
         formData.append('sessionId', noticeData.sessionId);
       }
+      if (noticeData.targetAdminIds && noticeData.targetAdminIds.length > 0) {
+        formData.append('targetAdminIds', JSON.stringify(noticeData.targetAdminIds));
+      }
+      if (noticeData.targetTeacherIds && noticeData.targetTeacherIds.length > 0) {
+        formData.append('targetTeacherIds', JSON.stringify(noticeData.targetTeacherIds));
+      }
       attachmentFiles.forEach(file => {
         formData.append('attachments', file);
       });
+      
+      // For SUPERADMIN: only pass schoolId if provided (optional for system-wide notices)
+      // For SCHOOLADMIN: schoolId comes from JWT token, don't pass in query
+      const queryParams: any = {};
+      if (noticeData.schoolId && getUserRole() === 'SUPERADMIN') {
+        queryParams.schoolId = noticeData.schoolId;
+      }
       
       return apiRequest<{ success: boolean; data: any; message: string }>(
         '/notices',
@@ -1106,18 +1176,25 @@ export const noticeAPI = {
           method: 'POST',
           body: formData,
         },
-        { schoolId: noticeData.schoolId }
+        Object.keys(queryParams).length > 0 ? queryParams : undefined
       );
     }
     
     // Otherwise, use JSON
+    // For SUPERADMIN: only pass schoolId if provided (optional for system-wide notices)
+    // For SCHOOLADMIN: schoolId comes from JWT token, don't pass in query
+    const queryParams: any = {};
+    if (noticeData.schoolId && getUserRole() === 'SUPERADMIN') {
+      queryParams.schoolId = noticeData.schoolId;
+    }
+    
     return apiRequest<{ success: boolean; data: any; message: string }>(
       '/notices',
       {
         method: 'POST',
         body: JSON.stringify(noticeData),
       },
-      { schoolId: noticeData.schoolId }
+      Object.keys(queryParams).length > 0 ? queryParams : undefined
     );
   },
 
@@ -1131,15 +1208,22 @@ export const noticeAPI = {
       sessionId?: string;
       attachments?: string[];
       schoolId?: string;
+      targetAdminIds?: string[];
     }
   ) => {
+    // For SUPERADMIN: only pass schoolId if provided (optional for system-wide notices)
+    const queryParams: any = {};
+    if (noticeData.schoolId) {
+      queryParams.schoolId = noticeData.schoolId;
+    }
+    
     return apiRequest<{ success: boolean; data: any; message: string }>(
       `/notices/${noticeId}`,
       {
         method: 'PATCH',
         body: JSON.stringify(noticeData),
       },
-      { schoolId: noticeData.schoolId }
+      Object.keys(queryParams).length > 0 ? queryParams : undefined
     );
   },
 
@@ -1148,7 +1232,7 @@ export const noticeAPI = {
     return apiRequest<{ success: boolean; data: any; message: string }>(
       `/notices/${noticeId}/archive`,
       { method: 'PATCH' },
-      { schoolId }
+      schoolId ? { schoolId } : undefined
     );
   },
 };
