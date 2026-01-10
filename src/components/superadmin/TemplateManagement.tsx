@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Plus, Edit, Trash2, Eye, Upload, School, FileText, ChevronRight, UserCircle, GraduationCap } from 'lucide-react';
+import { Plus, Edit, Trash2, Eye, Upload, School, FileText, ChevronRight, UserCircle, GraduationCap, Loader2 } from 'lucide-react';
 import { Checkbox } from '../ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Badge } from '../ui/badge';
-import { schoolAPI, templateAPI, APIError } from '../../utils/api';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
+import { schoolAPI, templateAPI, adminAPI, APIError } from '../../utils/api';
 
 type TemplateType = 'student' | 'teacher' | 'STUDENT' | 'TEACHER';
 
@@ -22,6 +23,8 @@ interface Template {
   lastModified?: string;
   isActive?: boolean;
   status?: 'active' | 'draft' | 'ACTIVE' | 'DRAFT';
+  layoutConfig?: any;
+  dataTags?: string[];
 }
 
 export function TemplateManagement() {
@@ -35,6 +38,10 @@ export function TemplateManagement() {
   const [templateType, setTemplateType] = useState<TemplateType>('student');
   const [schools, setSchools] = useState<any[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewTemplate, setPreviewTemplate] = useState<any>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [schoolAdmin, setSchoolAdmin] = useState<any>(null);
 
   useEffect(() => {
     const fetchSchools = async () => {
@@ -43,7 +50,17 @@ export function TemplateManagement() {
       try {
         const response = await schoolAPI.getSchools();
         if (response.success && response.data) {
-          setSchools(response.data);
+          // Map backend data to frontend format
+          const mappedSchools = response.data.map((school: any) => ({
+            _id: school._id,
+            id: school._id,
+            name: school.name || '',
+            address: school.address || '',
+            contactEmail: school.contactEmail || '',
+            phone: school.phone || school.mobile || school.contactEmail || '',
+            city: school.city || '',
+          }));
+          setSchools(mappedSchools);
         }
       } catch (err) {
         const apiError = err as APIError;
@@ -139,6 +156,407 @@ export function TemplateManagement() {
     });
   };
 
+  // Helper function to normalize field tags to avoid duplicates
+  // Maps variations of the same field to a canonical lowercase name for consistent comparison
+  const normalizeFieldTag = (tag: string): string => {
+    const normalizedTag = tag.toLowerCase().trim();
+    
+    // Map variations to canonical lowercase names for consistent comparison
+    if (normalizedTag === 'class' || normalizedTag === 'classname') {
+      return 'classname';
+    }
+    if (normalizedTag === 'dob' || normalizedTag === 'dateofbirth') {
+      return 'dob';
+    }
+    if (normalizedTag === 'mobile' || normalizedTag === 'phone') {
+      return 'mobile';
+    }
+    if (normalizedTag === 'photo' || normalizedTag === 'photourl') {
+      return 'photo';
+    }
+    // No need to check duplicates for single values - they're already normalized
+    
+    // Return lowercase version of original tag for consistent comparison
+    return normalizedTag;
+  };
+
+  // Helper function to organize fields into zones based on field type
+  // This categorizes fields into header, body (left/right columns), and footer zones
+  const organizeFieldsIntoZones = (dataTags: string[], templateType: TemplateType) => {
+    // First, normalize and deduplicate tags
+    // Remove duplicates from input array first
+    const uniqueInputTags = Array.from(new Set(dataTags));
+    
+    const normalizedTags = new Map<string, string>();
+    uniqueInputTags.forEach(tag => {
+      const normalized = normalizeFieldTag(tag);
+      // Keep the first occurrence, but prefer longer/more specific names
+      if (!normalizedTags.has(normalized) || tag.length > (normalizedTags.get(normalized)?.length || 0)) {
+        normalizedTags.set(normalized, tag);
+      }
+    });
+    
+    // Convert map keys to array of unique normalized tags (these are already unique)
+    const uniqueTags = Array.from(normalizedTags.keys());
+    
+    // Define field categories for proper zone placement
+    const headerFields: string[] = []; // Reserved for school name/logo (future use)
+    
+    // Primary body fields (left column) - main identification
+    const primaryBodyFields: string[] = [];
+    // Secondary body fields (left column) - metadata
+    const secondaryBodyFields: string[] = [];
+    
+    // Footer fields - additional info
+    const footerFields: string[] = [];
+    
+    // Photo is handled separately in right column
+    let hasPhoto = false;
+    
+    // Track which categories have been added to avoid duplicates
+    const addedFields = new Set<string>();
+
+    uniqueTags.forEach(normalizedTag => {
+      const originalTag = normalizedTags.get(normalizedTag) || normalizedTag;
+      
+      if (normalizedTag === 'photo') {
+        hasPhoto = true;
+        return;
+      }
+
+      // Skip if already added (prevent duplicates)
+      if (addedFields.has(normalizedTag)) {
+        return;
+      }
+
+      // Categorize fields based on importance and type
+      const tagLower = normalizedTag.toLowerCase();
+      
+      if (templateType === 'student' || templateType === 'STUDENT') {
+        // Student-specific field categorization
+        if (tagLower === 'studentname') {
+          primaryBodyFields.push(originalTag);
+          addedFields.add('studentname');
+        } else if (tagLower === 'admissionno') {
+          primaryBodyFields.push(originalTag);
+          addedFields.add('admissionno');
+        } else if (tagLower === 'classname') {
+          primaryBodyFields.push(originalTag);
+          addedFields.add('classname');
+        } else if (tagLower === 'fathername') {
+          secondaryBodyFields.push(originalTag);
+          addedFields.add('fathername');
+        } else if (tagLower === 'mothername') {
+          secondaryBodyFields.push(originalTag);
+          addedFields.add('mothername');
+        } else if (tagLower === 'dob') {
+          secondaryBodyFields.push(originalTag);
+          addedFields.add('dob');
+        } else if (tagLower === 'bloodgroup') {
+          secondaryBodyFields.push(originalTag);
+          addedFields.add('bloodgroup');
+        } else if (tagLower === 'mobile') {
+          secondaryBodyFields.push(originalTag);
+          addedFields.add('mobile');
+        } else if (tagLower === 'address') {
+          secondaryBodyFields.push(originalTag);
+          addedFields.add('address');
+        } else {
+          // Default to secondary body for unknown fields (only if not already added)
+          if (!addedFields.has(tagLower)) {
+            secondaryBodyFields.push(originalTag);
+            addedFields.add(tagLower);
+          }
+        }
+      } else {
+        // Teacher-specific field categorization
+        if (tagLower === 'name') {
+          primaryBodyFields.push(originalTag);
+          addedFields.add('name');
+        } else if (tagLower === 'email') {
+          primaryBodyFields.push(originalTag);
+          addedFields.add('email');
+        } else if (tagLower === 'classid') {
+          primaryBodyFields.push(originalTag);
+          addedFields.add('classid');
+        } else if (tagLower === 'schoolid') {
+          primaryBodyFields.push(originalTag);
+          addedFields.add('schoolid');
+        } else if (tagLower === 'mobile') {
+          secondaryBodyFields.push(originalTag);
+          addedFields.add('mobile');
+        } else {
+          // Default to secondary body for unknown fields (only if not already added)
+          if (!addedFields.has(tagLower)) {
+            secondaryBodyFields.push(originalTag);
+            addedFields.add(tagLower);
+          }
+        }
+      }
+    });
+
+    return {
+      zones: {
+        header: {
+          enabled: headerFields.length > 0,
+          height: headerFields.length > 0 ? 15 : 0, // Percentage of card height
+          fields: headerFields
+        },
+        body: {
+          leftColumn: {
+            primaryFields: primaryBodyFields,
+            secondaryFields: secondaryBodyFields
+          },
+          rightColumn: {
+            photo: hasPhoto ? { enabled: true, size: { width: 1.3, height: 1.7 } } : { enabled: false } // Passport size in inches (35mm x 45mm ≈ 1.38" x 1.77")
+          }
+        },
+        footer: {
+          enabled: footerFields.length > 0,
+          height: footerFields.length > 0 ? 20 : 0, // Percentage of card height
+          fields: footerFields
+        }
+      }
+    };
+  };
+
+  // Helper function to get sample data for a field tag
+  // Returns only values without labels to avoid duplication with field labels
+  const getSampleDataForTag = (tag: string, templateType: TemplateType, selectedSchool?: string): string => {
+    const normalizedTag = tag.toLowerCase();
+    
+    if (templateType === 'student' || templateType === 'STUDENT') {
+      switch (normalizedTag) {
+        case 'studentname':
+          return 'Rajesh Kumar';
+        case 'admissionno':
+          return '2024-001'; // Removed "Adm:" prefix
+        case 'class':
+        case 'classname':
+          return '10-A'; // Removed "Class:" prefix
+        case 'fathername':
+          return 'Suresh Kumar'; // Removed "Father:" prefix
+        case 'mothername':
+          return 'Priya Kumar'; // Removed "Mother:" prefix
+        case 'dob':
+        case 'dateofbirth':
+          return '15/05/2010'; // Removed "DOB:" prefix
+        case 'bloodgroup':
+          return 'O+'; // Removed "Blood:" prefix
+        case 'mobile':
+        case 'phone':
+          return '+91 98765 43210'; // Removed "Mobile:" prefix
+        case 'address':
+          return '123 Main St, City';
+        default:
+          return tag;
+      }
+    } else {
+      switch (normalizedTag) {
+        case 'name':
+          return 'Dr. Priya Sharma';
+        case 'email':
+          return 'priya.sharma@school.com';
+        case 'mobile':
+        case 'phone':
+          return '+91 98765 43210'; // Removed "Mobile:" prefix
+        case 'schoolid':
+          return selectedSchool || 'School Name';
+        case 'classid':
+          return '10-A'; // Removed "Class:" prefix
+        default:
+          return tag;
+      }
+    }
+  };
+
+  // Helper function to render ID card preview with zoned layout
+  const renderCardPreview = (
+    layoutConfig: any,
+    dataTags: string[],
+    templateType: TemplateType,
+    backgroundImageUrl?: string | null
+  ) => {
+    // Backward compatibility: Check if old flat fields structure exists
+    const hasZones = layoutConfig?.zones;
+    const hasOldFields = layoutConfig?.fields && Array.isArray(layoutConfig.fields);
+    
+    // Extract zones from layoutConfig or create from dataTags for backward compatibility
+    let zones;
+    if (hasZones) {
+      zones = layoutConfig.zones;
+    } else if (hasOldFields) {
+      // Convert old structure to new zoned structure for backward compatibility
+      const oldTags = layoutConfig.fields.map((f: any) => f.tag || f);
+      const organized = organizeFieldsIntoZones(oldTags, templateType);
+      zones = organized.zones;
+    } else {
+      // Fallback: organize current dataTags
+      const organized = organizeFieldsIntoZones(dataTags, templateType);
+      zones = organized.zones;
+    }
+
+    const bgImage = backgroundImageUrl || layoutConfig?.backgroundImage;
+    const hasPhoto = zones.body?.rightColumn?.photo?.enabled || dataTags.includes('photo') || dataTags.includes('photoUrl');
+    
+    // Get selected school data for header
+    const selectedSchoolData = schools.find((school: any) => (school._id || school.id) === selectedSchoolId);
+    const schoolName = selectedSchoolData?.name || selectedSchool || 'SCHOOL NAME';
+    const schoolAddress = selectedSchoolData?.address || 'SECTOR-XX, CITY (STATE)';
+    // Use school admin's phone number instead of school's phone
+    const adminPhone = schoolAdmin?.phone || '';
+
+    return (
+      <div 
+        className="max-w-sm mx-auto bg-white rounded-lg shadow-lg overflow-hidden aspect-[3.5/2] relative"
+      >
+        {/* Background image layer (if provided) - optional overlay */}
+        {bgImage && (
+          <div 
+            className="absolute inset-0 opacity-20"
+            style={{
+              backgroundImage: `url(${bgImage})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              backgroundRepeat: 'no-repeat',
+            }}
+          ></div>
+        )}
+
+        {/* Card Content with Reference Image Layout (DAV School ID Card Style) - Using Grid for fixed layout */}
+        {/* Grid: Header 20%, Body 70%, Footer 10% - Total 100% - Footer always stays at bottom */}
+        <div className="absolute inset-0 grid relative z-10 overflow-hidden h-full" style={{ 
+          gridTemplateRows: '20% 70% 10%',
+          height: '100%'
+        }}>
+          {/* HEADER ZONE: Red background with school name and address - Fixed at top */}
+          <div className="bg-red-600 px-2 py-1 flex items-center justify-center relative overflow-visible" style={{ gridRow: '1 / 2', height: '100%', maxHeight: '100%', minHeight: '0' }}>
+            {/* School Name and Address - Centered */}
+            <div className="flex flex-col justify-center items-center text-center w-full" style={{ paddingTop: '4px', paddingBottom: '2px', gap: '1px' }}>
+              <div className="font-extrabold uppercase leading-tight tracking-tight" style={{ color: '#000000', fontWeight: 'bold', fontSize: '25px', lineHeight: '1.1', marginBottom: '0', paddingBottom: '0' }}>
+                {schoolName.toUpperCase()}
+              </div>
+              <div className="uppercase tracking-tight font-semibold" style={{ color: '#000000', fontSize: '16px', lineHeight: '1.1', fontWeight: '600', marginTop: '0', paddingTop: '0' }}>
+                {schoolAddress}{adminPhone ? ` Ph.: ${adminPhone}` : ''}
+              </div>
+            </div>
+            
+            {/* Dotted red separator line at bottom of header - Fixed at bottom */}
+            <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-red-400" style={{
+              backgroundImage: 'repeating-linear-gradient(to right, #fca5a5 0px, #fca5a5 2px, transparent 2px, transparent 4px)'
+            }}></div>
+          </div>
+
+          {/* BODY ZONE: Transparent background with student details (left) and photo (right) - Scrollable if needed, fixed between header and footer */}
+          <div className="px-2 py-2 flex gap-2 overflow-hidden min-h-0" style={{ gridRow: '2 / 3', height: '100%', maxHeight: '100%', overflow: 'hidden', backgroundColor: 'transparent', marginTop: '3px' }}>
+            {/* LEFT COLUMN: Student Details - All fields aligned in straight vertical line */}
+            <div className="flex-1 flex flex-col gap-0.5 overflow-hidden min-w-0 max-h-full">
+              {/* Student Information Fields - Format: "LABEL : value" - All fields in straight vertical line, perfectly left-aligned */}
+              <div className="flex-1 overflow-hidden min-h-0 max-h-full" style={{ paddingLeft: '8px', marginLeft: '0', paddingRight: '0', paddingTop: '0', paddingBottom: '0' }}>
+                <div className="space-y-[2px]" style={{ width: '100%', padding: '0', margin: '0' }}>
+                  {/* Primary fields (NAME, CLASS, ADMISSION) */}
+                  {zones.body?.leftColumn?.primaryFields && zones.body.leftColumn.primaryFields.length > 0 && (
+                    <>
+                      {zones.body.leftColumn.primaryFields.map((tag: string, idx: number) => {
+                        const normalizedTag = normalizeFieldTag(tag);
+                        const tagLower = normalizedTag.toLowerCase();
+                        const isName = tagLower === 'studentname';
+                        let tagLabel = '';
+                        
+                        // Generate label based on normalized tag
+                        if (tagLower === 'studentname') tagLabel = 'NAME';
+                        else if (tagLower === 'admissionno') tagLabel = 'ADM.';
+                        else if (tagLower === 'classname') tagLabel = 'CLASS';
+                        else {
+                          // Fallback: capitalize first letter and add spaces before uppercase letters
+                          tagLabel = normalizedTag.charAt(0).toUpperCase() + normalizedTag.slice(1).replace(/([A-Z])/g, ' $1');
+                        }
+                        
+                        return (
+                          <div
+                            key={`primary-${normalizedTag}-${idx}`}
+                            className={`text-gray-900 leading-tight block ${
+                              isName ? 'text-[5px] font-bold' : 'text-[4px] font-semibold'
+                            }`}
+                            style={{ textAlign: 'left', padding: '0', margin: '0', width: '100%', display: 'block', lineHeight: '1.2' }}
+                          >
+                            <span className="font-bold">{tagLabel.toUpperCase()} :</span> <span>{getSampleDataForTag(normalizedTag, templateType, selectedSchool)}</span>
+                          </div>
+                        );
+                      })}
+                    </>
+                  )}
+
+                  {/* Secondary fields (F. NAME, M. NAME, Ph. No., D.O.B., ADDRESS) */}
+                  {zones.body?.leftColumn?.secondaryFields && zones.body.leftColumn.secondaryFields.length > 0 && (
+                    <>
+                      {zones.body.leftColumn.secondaryFields.slice(0, 8).map((tag: string, idx: number) => {
+                        const normalizedTag = normalizeFieldTag(tag);
+                        const tagLower = normalizedTag.toLowerCase();
+                        let tagLabel = '';
+                        
+                        // Format labels to match reference image exactly
+                        if (tagLower === 'fathername') tagLabel = 'F. NAME';
+                        else if (tagLower === 'mothername') tagLabel = 'M. NAME';
+                        else if (tagLower === 'mobile') tagLabel = 'Ph. No.';
+                        else if (tagLower === 'dob') tagLabel = 'D.O.B.';
+                        else if (tagLower === 'address') tagLabel = 'ADDRESS';
+                        else if (tagLower === 'bloodgroup') tagLabel = 'BLOOD GROUP';
+                        else {
+                          // Fallback: capitalize first letter and add spaces
+                          tagLabel = normalizedTag.charAt(0).toUpperCase() + normalizedTag.slice(1).replace(/([A-Z])/g, ' $1');
+                        }
+                        
+                        return (
+                          <div
+                            key={`secondary-${normalizedTag}-${idx}`}
+                            className="text-[4px] text-gray-900 leading-tight font-semibold block"
+                            style={{ textAlign: 'left', padding: '0', margin: '0', width: '100%', display: 'block', lineHeight: '1.2' }}
+                          >
+                            <span className="font-bold">{tagLabel.toUpperCase()} :</span> <span>{getSampleDataForTag(normalizedTag, templateType, selectedSchool)}</span>
+                          </div>
+                        );
+                      })}
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* RIGHT COLUMN: Passport Photo with dark blue border (matches reference) */}
+            {hasPhoto && (
+              <div className="flex-shrink-0 flex flex-col items-end pt-1 gap-1" style={{ width: '100px' }}>
+                <div className="w-[100px] h-[110px] border-2 border-blue-700 rounded-sm overflow-hidden shadow-sm bg-gray-200 flex items-center justify-center">
+                  <img 
+                    src="https://via.placeholder.com/100x110/4F46E5/FFFFFF?text=Photo" 
+                    alt="Student Photo" 
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      // Fallback to placeholder if image fails to load
+                      const target = e.target as HTMLImageElement;
+                      target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjExMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjExMCIgZmlsbD0iI0U1RTdFQiIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTIiIGZpbGw9IiM5Q0EzQUYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5QaG90bzwvdGV4dD48L3N2Zz4=';
+                    }}
+                  />
+                </div>
+                {/* Session highlighted in yellow oval/ellipse - Positioned below photo */}
+                <div className="bg-yellow-400 rounded-full px-2 py-0.5 inline-block w-fit shadow-sm flex-shrink-0" style={{ marginRight: '0' }}>
+                  <span className="text-[4px] font-bold text-gray-900">SESSION : 2024-25</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* FOOTER ZONE: Red background with school email - Fixed at bottom row, never moves */}
+          <div className="bg-red-600 px-2 py-1 flex items-center justify-center text-[5px] font-semibold overflow-hidden" style={{ gridRow: '3 / 4', height: '100%', maxHeight: '100%', alignSelf: 'end' }}>
+            <div className="uppercase leading-tight" style={{ color: '#000000' }}>
+              <span className="font-bold">E-mail.:</span> {selectedSchoolData?.contactEmail || 'school@example.com'}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const handleSaveTemplate = async () => {
     // Validate required fields
     if (!templateData.name.trim()) {
@@ -174,8 +592,14 @@ export function TemplateManagement() {
       .filter(([_, checked]) => checked === true)
       .map(([field, _]) => fieldToTagMap[field] || field);
 
-    if (dataTags.length === 0) {
-      setError('At least one field must be selected');
+    // Validate minimum and maximum fields
+    if (dataTags.length < 2) {
+      setError('At least 2 fields must be selected');
+      return;
+    }
+    
+    if (dataTags.length > 8) {
+      setError('Maximum 8 fields allowed. Please select fewer fields.');
       return;
     }
 
@@ -198,16 +622,20 @@ export function TemplateManagement() {
       }
     }
 
-    // Create a basic layoutConfig
-    // This is a simplified layout - can be enhanced later
-    // For updates, preserve existing backgroundImage if no new one is provided
+    // Create structured layoutConfig with zones
+    // This replaces the old flat fields array with a zoned layout structure
+    const zones = organizeFieldsIntoZones(dataTags, templateType);
+    
     const layoutConfig = {
       backgroundImage: backgroundImageBase64 || (editingTemplateId && templateData.backgroundImageUrl ? templateData.backgroundImageUrl : null),
       width: 3.5, // inches
       height: 2.0, // inches
+      // New zoned structure
+      zones: zones.zones,
+      // Backward compatibility: Keep fields array for old templates
       fields: dataTags.map(tag => ({
         tag,
-        position: { x: 0, y: 0 }, // Default position
+        position: { x: 0, y: 0 },
         fontSize: 12,
         fontFamily: 'Arial',
       })),
@@ -224,8 +652,8 @@ export function TemplateManagement() {
       if (editingTemplateId) {
         // Update existing template
         // Note: schoolId is not required for Superadmin - controller validates from template itself
-        // Extract dataTags from layoutConfig.fields for the update
-        const updatedDataTags = layoutConfig.fields?.map((field: any) => field.tag) || dataTags;
+        // Extract dataTags from layoutConfig.zones or use current dataTags
+        const updatedDataTags = dataTags; // Use the dataTags we already have
         response = await templateAPI.updateTemplate(editingTemplateId, {
           name: templateData.name.trim(),
           layoutConfig,
@@ -392,6 +820,28 @@ export function TemplateManagement() {
       setError(apiError.message || 'Failed to load template');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handlePreviewTemplate = async (templateId: string) => {
+    try {
+      setPreviewLoading(true);
+      setError(null);
+      
+      // Fetch the full template data
+      const response = await templateAPI.getTemplateById(templateId);
+      
+      if (response.success && response.data) {
+        setPreviewTemplate(response.data);
+        setPreviewOpen(true);
+      } else {
+        setError('Failed to load template data for preview');
+      }
+    } catch (err) {
+      const apiError = err as APIError;
+      setError(apiError.message || 'Failed to load template for preview');
+    } finally {
+      setPreviewLoading(false);
     }
   };
 
@@ -624,30 +1074,77 @@ export function TemplateManagement() {
 
             {/* Data Fields */}
             <div>
-              <Label>Select Fields to Display</Label>
-              <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                {Object.entries(templateData.fields).map(([field, checked]) => (
-                  <div key={field} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={field}
-                      checked={checked}
-                      onCheckedChange={(value) =>
-                        setTemplateData({
-                          ...templateData,
-                          fields: { ...templateData.fields, [field]: value as boolean },
-                        })
-                      }
-                    />
-                    <label
-                      htmlFor={field}
-                      className="text-gray-700 cursor-pointer select-none"
-                    >
-                      {field
-                        .replace(/([A-Z])/g, ' $1')
-                        .replace(/^./, (str) => str.toUpperCase())}
-                    </label>
+              <Label>Select Fields to Display (Minimum: 2, Maximum: 8)</Label>
+              {(() => {
+                const selectedCount = Object.values(templateData.fields).filter(Boolean).length;
+                return (
+                  <div className="mt-2 mb-4">
+                    <p className="text-sm text-gray-600">
+                      Selected: <span className={`font-semibold ${selectedCount < 2 || selectedCount > 8 ? 'text-red-600' : 'text-green-600'}`}>
+                        {selectedCount} / 8
+                      </span>
+                      {selectedCount < 2 && <span className="text-red-600 ml-2">(Minimum 2 fields required)</span>}
+                      {selectedCount > 8 && <span className="text-red-600 ml-2">(Maximum 8 fields allowed)</span>}
+                    </p>
                   </div>
-                ))}
+                );
+              })()}
+              <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                {Object.entries(templateData.fields).map(([field, checked]) => {
+                  const selectedCount = Object.values(templateData.fields).filter(Boolean).length;
+                  // Disable checkbox if: trying to check when already at max (8), or trying to uncheck when at minimum (2)
+                  const isDisabled = (!checked && selectedCount >= 8) || (checked && selectedCount <= 2);
+                  
+                  return (
+                    <div key={field} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={field}
+                        checked={checked}
+                        disabled={isDisabled}
+                        onCheckedChange={(value) => {
+                          const currentCount = Object.values(templateData.fields).filter(Boolean).length;
+                          const newValue = value as boolean;
+                          
+                          // Calculate what the count would be after this change
+                          const newCount = newValue ? currentCount + 1 : currentCount - 1;
+                          
+                          // Validate minimum (2 fields)
+                          if (!newValue && newCount < 2) {
+                            setError('At least 2 fields must be selected. You cannot uncheck this field.');
+                            setTimeout(() => setError(null), 3000);
+                            return;
+                          }
+                          
+                          // Validate maximum (8 fields)
+                          if (newValue && currentCount >= 8) {
+                            setError('Maximum 8 fields allowed. Please uncheck another field first.');
+                            setTimeout(() => setError(null), 3000);
+                            return;
+                          }
+                          
+                          setError(null); // Clear any previous errors
+                          setTemplateData({
+                            ...templateData,
+                            fields: { ...templateData.fields, [field]: newValue },
+                          });
+                        }}
+                      />
+                      <label
+                        htmlFor={field}
+                        onClick={(e) => {
+                          if (isDisabled) {
+                            e.preventDefault();
+                          }
+                        }}
+                        className={`select-none ${isDisabled ? 'text-gray-400 cursor-not-allowed' : 'text-gray-700 cursor-pointer'}`}
+                      >
+                        {field
+                          .replace(/([A-Z])/g, ' $1')
+                          .replace(/^./, (str) => str.toUpperCase())}
+                      </label>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
@@ -655,101 +1152,60 @@ export function TemplateManagement() {
             <div>
               <Label>Preview</Label>
               <div className="mt-2 bg-gray-100 rounded-lg p-8 text-center">
-                <div 
-                  className="max-w-sm mx-auto bg-white rounded-lg shadow-lg overflow-hidden aspect-[3.5/2] relative"
-                  style={{
-                    backgroundImage: templateData.backgroundImageUrl ? `url(${templateData.backgroundImageUrl})` : 'none',
-                    backgroundSize: 'cover',
-                    backgroundPosition: 'center',
-                    backgroundRepeat: 'no-repeat',
-                  }}
-                >
-                  {!templateData.backgroundImageUrl && (
-                    <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
-                      <p className="text-gray-400 text-sm">No background image</p>
-                    </div>
-                  )}
-                  <div className="absolute inset-0 p-4 flex flex-col justify-between">
-                    {/* Sample Photo Placeholder */}
-                    {templateData.fields.photo && (
-                      <div className="self-end">
-                        <div className="w-20 h-24 bg-gray-200 border-2 border-gray-300 rounded flex items-center justify-center">
-                          <span className="text-xs text-gray-500">Photo</span>
-                        </div>
-                      </div>
-                    )}
-                    
-                    {/* Sample Data Fields */}
-                    <div className="space-y-1 text-left">
-                      {templateData.fields.studentName && (
-                        <div className="bg-white/80 backdrop-blur-sm px-2 py-1 rounded text-sm font-semibold">
-                          Student Name
-                        </div>
-                      )}
-                      {templateData.fields.admissionNo && (
-                        <div className="bg-white/80 backdrop-blur-sm px-2 py-1 rounded text-xs">
-                          Admission No: 12345
-                        </div>
-                      )}
-                      {templateData.fields.class && (
-                        <div className="bg-white/80 backdrop-blur-sm px-2 py-1 rounded text-xs">
-                          Class: 10-A
-                        </div>
-                      )}
-                      {templateData.fields.fatherName && (
-                        <div className="bg-white/80 backdrop-blur-sm px-2 py-1 rounded text-xs">
-                          Father: John Doe
-                        </div>
-                      )}
-                      {templateData.fields.motherName && (
-                        <div className="bg-white/80 backdrop-blur-sm px-2 py-1 rounded text-xs">
-                          Mother: Jane Doe
-                        </div>
-                      )}
-                      {templateData.fields.dob && (
-                        <div className="bg-white/80 backdrop-blur-sm px-2 py-1 rounded text-xs">
-                          DOB: 01/01/2010
-                        </div>
-                      )}
-                      {templateData.fields.bloodGroup && (
-                        <div className="bg-white/80 backdrop-blur-sm px-2 py-1 rounded text-xs">
-                          Blood Group: O+
-                        </div>
-                      )}
-                      {templateData.fields.mobile && (
-                        <div className="bg-white/80 backdrop-blur-sm px-2 py-1 rounded text-xs">
-                          Mobile: +1234567890
-                        </div>
-                      )}
-                      {templateData.fields.address && (
-                        <div className="bg-white/80 backdrop-blur-sm px-2 py-1 rounded text-xs">
-                          Address: Sample Address
-                        </div>
-                      )}
-                      {templateData.fields.name && templateType === 'teacher' && (
-                        <div className="bg-white/80 backdrop-blur-sm px-2 py-1 rounded text-sm font-semibold">
-                          Teacher Name
-                        </div>
-                      )}
-                      {templateData.fields.email && templateType === 'teacher' && (
-                        <div className="bg-white/80 backdrop-blur-sm px-2 py-1 rounded text-xs">
-                          Email: teacher@school.com
-                        </div>
-                      )}
-                      {templateData.fields.mobile && templateType === 'teacher' && (
-                        <div className="bg-white/80 backdrop-blur-sm px-2 py-1 rounded text-xs">
-                          Mobile: +1234567890
-                        </div>
-                      )}
-                      {templateData.fields.schoolId && templateType === 'teacher' && (
-                        <div className="bg-white/80 backdrop-blur-sm px-2 py-1 rounded text-xs">
-                          School: {selectedSchool || 'School Name'}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                <p className="text-xs text-gray-500 mt-4">ID Card Preview (3.5" x 2")</p>
+                {/* Render card preview using zoned layout */}
+                {renderCardPreview(
+                  {
+                    backgroundImage: templateData.backgroundImageUrl,
+                    zones: organizeFieldsIntoZones(
+                      Object.entries(templateData.fields)
+                        .filter(([_, checked]) => checked)
+                        .map(([field]) => {
+                          const fieldToTagMap: Record<string, string> = {
+                            studentName: 'studentName',
+                            admissionNo: 'admissionNo',
+                            class: 'className',
+                            fatherName: 'fatherName',
+                            motherName: 'motherName',
+                            dob: 'dob',
+                            bloodGroup: 'bloodGroup',
+                            mobile: 'mobile',
+                            address: 'address',
+                            photo: 'photo',
+                            name: 'name',
+                            email: 'email',
+                            classId: 'classId',
+                            schoolId: 'schoolId',
+                          };
+                          return fieldToTagMap[field] || field;
+                        }),
+                      templateType
+                    ).zones,
+                  },
+                  Object.entries(templateData.fields)
+                    .filter(([_, checked]) => checked)
+                    .map(([field]) => {
+                      const fieldToTagMap: Record<string, string> = {
+                        studentName: 'studentName',
+                        admissionNo: 'admissionNo',
+                        class: 'className',
+                        fatherName: 'fatherName',
+                        motherName: 'motherName',
+                        dob: 'dob',
+                        bloodGroup: 'bloodGroup',
+                        mobile: 'mobile',
+                        address: 'address',
+                        photo: 'photo',
+                        name: 'name',
+                        email: 'email',
+                        classId: 'classId',
+                        schoolId: 'schoolId',
+                      };
+                      return fieldToTagMap[field] || field;
+                    }),
+                  templateType,
+                  templateData.backgroundImageUrl
+                )}
+                <p className="text-xs text-gray-500 mt-4">ID Card Preview (3.5" x 2") - Zoned Layout</p>
               </div>
             </div>
 
@@ -858,7 +1314,12 @@ export function TemplateManagement() {
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-2">
-                            <Button variant="ghost" size="sm" title="Preview">
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              title="Preview"
+                              onClick={() => handlePreviewTemplate(template._id || template.id || '')}
+                            >
                               <Eye className="w-4 h-4" />
                             </Button>
                             <Button
@@ -888,6 +1349,93 @@ export function TemplateManagement() {
           )}
         </div>
       )}
+
+      {/* Preview Modal */}
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              Template Preview: {previewTemplate?.name || 'Loading...'}
+            </DialogTitle>
+          </DialogHeader>
+          
+          {previewLoading ? (
+            <div className="flex items-center justify-center p-12">
+              <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+              <p className="ml-3 text-gray-600">Loading template preview...</p>
+            </div>
+          ) : previewTemplate ? (
+            <div className="space-y-6">
+              {/* Template Info */}
+              <div className="bg-gray-50 rounded-lg p-4">
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-gray-600">Type:</span>
+                    <span className="ml-2 font-medium text-gray-900">
+                      {previewTemplate.type?.charAt(0).toUpperCase() + previewTemplate.type?.slice(1).toLowerCase() || 'N/A'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Status:</span>
+                    <span className={`ml-2 font-medium ${
+                      previewTemplate.isActive ? 'text-green-600' : 'text-gray-600'
+                    }`}>
+                      {previewTemplate.isActive ? 'Active' : 'Draft'}
+                    </span>
+                  </div>
+                  {previewTemplate.createdAt && (
+                    <div>
+                      <span className="text-gray-600">Created:</span>
+                      <span className="ml-2 font-medium text-gray-900">
+                        {new Date(previewTemplate.createdAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                  )}
+                  {previewTemplate.updatedAt && (
+                    <div>
+                      <span className="text-gray-600">Last Modified:</span>
+                      <span className="ml-2 font-medium text-gray-900">
+                        {new Date(previewTemplate.updatedAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* ID Card Preview */}
+              <div className="bg-gray-100 rounded-lg p-8 text-center">
+                <Label className="text-lg font-semibold mb-4 block">ID Card Preview</Label>
+                {/* Render card preview using zoned layout */}
+                {renderCardPreview(
+                  previewTemplate.layoutConfig || {},
+                  previewTemplate.dataTags || [],
+                  previewTemplate.type?.toLowerCase() as TemplateType || templateType,
+                  previewTemplate.layoutConfig?.backgroundImage
+                )}
+                <p className="text-xs text-gray-500 mt-4">ID Card Preview (3.5" x 2") - Zoned Layout</p>
+              </div>
+
+              {/* Fields List */}
+              {previewTemplate.dataTags && previewTemplate.dataTags.length > 0 && (
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <Label className="text-sm font-semibold mb-2 block">Included Fields:</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {previewTemplate.dataTags.map((tag: string, index: number) => (
+                      <Badge key={index} variant="secondary" className="text-xs">
+                        {tag.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase())}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="p-12 text-center text-gray-600">
+              Preview not available
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

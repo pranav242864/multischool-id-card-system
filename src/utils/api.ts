@@ -332,6 +332,7 @@ export const templateAPI = {
     name: string;
     type: string;
     layoutConfig: any;
+    dataTags?: string[];
     sessionId?: string;
     classId?: string;
     isActive?: boolean;
