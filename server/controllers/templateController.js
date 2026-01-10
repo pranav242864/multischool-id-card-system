@@ -263,9 +263,9 @@ exports.updateTemplate = asyncHandler(async (req, res) => {
       });
     }
     template.dataTags = dataTags;
-  } else if (layoutConfig?.fields && Array.isArray(layoutConfig.fields)) {
+  } else if (layoutConfig && layoutConfig.fields && Array.isArray(layoutConfig.fields)) {
     // Extract dataTags from layoutConfig.fields if dataTags not provided
-    const extractedTags = layoutConfig.fields.map((field: any) => field.tag).filter(Boolean);
+    const extractedTags = layoutConfig.fields.map((field) => field.tag).filter(Boolean);
     if (extractedTags.length > 0) {
       const tagValidation = validateTemplateTags(extractedTags, template.type);
       if (tagValidation.valid) {
