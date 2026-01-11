@@ -2,7 +2,7 @@ const express = require('express');
 const authMiddleware = require('../middleware/authMiddleware');
 const requireRole = require('../middleware/requireRole');
 const schoolScoping = require('../middleware/schoolScoping');
-const { getUsers, getUser, createTeacherUser, createSchoolAdminUser, createTeacherUserAdmin, updateUser, deleteUser } = require('../controllers/userController');
+const { getUsers, getUser, createTeacherUser, createSchoolAdminUser, createTeacherUserAdmin, createTeacherUserForSchool, updateUser, deleteUser } = require('../controllers/userController');
 
 const router = express.Router();
 
@@ -24,6 +24,9 @@ router.post('/admin', requireRole('SUPERADMIN'), createSchoolAdminUser);
 
 // POST /api/v1/users/teacher-admin - Create a TEACHER user (Superadmin only)
 router.post('/teacher-admin', requireRole('SUPERADMIN'), createTeacherUserAdmin);
+
+// POST /api/v1/users/teacher-for-school - Create a TEACHER user (School admin only, uses req.user.schoolId)
+router.post('/teacher-for-school', requireRole('SCHOOLADMIN'), createTeacherUserForSchool);
 
 // PUT /api/v1/users/:id - Update user (Superadmin only, requires schoolId query param)
 router.put('/:id', requireRole('SUPERADMIN'), updateUser);

@@ -408,6 +408,9 @@ export function ManageStudents() {
     try {
       const studentIds = Array.from(selectedStudents);
       const targetClassId = targetClass._id || targetClass.id;
+      
+      console.log('Bulk promote request:', { studentIds, targetClassId, selectedSchoolId });
+      
       const response = await studentAPI.bulkPromoteStudents(studentIds, targetClassId, selectedSchoolId);
       
       if (response.success) {
@@ -421,10 +424,20 @@ export function ManageStudents() {
         // Show success message
         setError(null);
         alert(response.message || `Successfully promoted ${response.results?.success || 0} student(s)`);
+      } else {
+        setError(response.message || 'Failed to promote students');
       }
-    } catch (err) {
+    } catch (err: any) {
+      console.error('Bulk promote error:', err);
       const apiError = err as APIError;
-      setError(apiError.message || 'Failed to promote students');
+      // Show more specific error message
+      if (apiError.message) {
+        setError(apiError.message);
+      } else if (err instanceof Error) {
+        setError(err.message || 'Failed to promote students. Please try again.');
+      } else {
+        setError('Failed to promote students. Please check your connection and try again.');
+      }
     } finally {
       setIsPromoting(false);
     }
@@ -1246,8 +1259,8 @@ export function ManageStudents() {
               Cancel
             </Button>
             <Button
+              variant="outline"
               onClick={handleBulkPromote}
-              className="bg-purple-600 hover:bg-purple-700 text-white"
               disabled={isPromoting || !targetClassName || targetClassName.trim() === ''}
             >
               {isPromoting ? (
@@ -1256,10 +1269,7 @@ export function ManageStudents() {
                   Promoting...
                 </>
               ) : (
-                <>
-                  <ArrowUp className="w-4 h-4 mr-2" />
-                  Promote Students
-                </>
+                'Promote'
               )}
             </Button>
           </div>

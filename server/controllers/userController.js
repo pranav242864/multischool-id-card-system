@@ -1,11 +1,13 @@
 const User = require('../models/User');
 const School = require('../models/School');
 const Teacher = require('../models/Teacher');
+const Class = require('../models/Class');
 const asyncHandler = require('../utils/asyncHandler');
 const bcrypt = require('bcryptjs');
 const mongoose = require('mongoose');
 const { getSchoolIdForOperation } = require('../utils/getSchoolId');
 const { checkSchoolNotFrozen } = require('../utils/schoolUtils');
+const { getActiveSession } = require('../utils/sessionUtils');
 
 // @desc    Get all users
 // @route   GET /api/v1/users
@@ -422,6 +424,287 @@ const createTeacherUserAdmin = asyncHandler(async (req, res, next) => {
   }
 });
 
+// @desc    Create new TEACHER user (School admin only - uses req.user.schoolId)
+// @route   POST /api/v1/users/teacher-for-school
+// @access  Private (School admin only)
+const createTeacherUserForSchool = asyncHandler(async (req, res, next) => {
+  const { name, email, password, username, mobile, classId, photoUrl } = req.body;
+
+  // Get schoolId from authenticated user (school admin's school)
+  let schoolId;
+  try {
+    schoolId = getSchoolIdForOperation(req);
+  } catch (error) {
+    return res.status(400).json({
+      success: false,
+      message: error.message
+    });
+  }
+
+  // Validate required fields
+  if (!name || !email || !password || !mobile) {
+    return res.status(400).json({
+      success: false,
+      message: 'Name, email, password, and mobile are required'
+    });
+  }
+
+  // Validate email format
+  const emailRegex = /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/;
+  if (!emailRegex.test(email)) {
+    return res.status(400).json({
+      success: false,
+      message: 'Please enter a valid email'
+    });
+  }
+
+  // Validate password length
+  if (password.length < 6) {
+    return res.status(400).json({
+      success: false,
+      message: 'Password must be at least 6 characters'
+    });
+  }
+
+  // Validate school exists
+  const school = await School.findById(schoolId);
+  if (!school) {
+    return res.status(400).json({
+      success: false,
+      message: 'School not found'
+    });
+  }
+
+  // Check if school is frozen
+  if (school.frozen) {
+    return res.status(403).json({
+      success: false,
+      message: 'Cannot create teachers for a frozen school'
+    });
+  }
+
+  // Check for duplicate email in User model (check ALL users, not just ACTIVE)
+  // MongoDB unique index will reject if ANY user (including DISABLED) has this email+schoolId
+  const existingUserEmail = await User.findOne({ 
+    email: email.toLowerCase(), 
+    schoolId
+  });
+  if (existingUserEmail) {
+    // If the existing user is ACTIVE, prevent creation
+    if (existingUserEmail.status === 'ACTIVE') {
+      return res.status(409).json({
+        success: false,
+        message: 'Email already exists for this school'
+      });
+    }
+    // If DISABLED user exists, we still can't create because of unique index
+    return res.status(409).json({
+      success: false,
+      message: 'Email already exists for this school (user may be disabled)'
+    });
+  }
+
+  try {
+    // Generate username if not provided
+    let finalUsername = username || email.split('@')[0].toLowerCase();
+
+    // Check for duplicate username (check ALL users, not just ACTIVE)
+    // MongoDB unique index will reject if ANY user (including DISABLED) has this username+schoolId
+    const existingUsername = await User.findOne({ 
+      username: finalUsername, 
+      schoolId
+    });
+    if (existingUsername) {
+      // If ACTIVE or DISABLED user exists, generate new username to avoid unique index violation
+      let counter = 1;
+      let newUsername = `${finalUsername}${counter}`;
+      while (await User.findOne({ 
+        username: newUsername, 
+        schoolId
+      })) {
+        counter++;
+        newUsername = `${finalUsername}${counter}`;
+      }
+      finalUsername = newUsername;
+    }
+
+    // Hash password
+    const saltRounds = 10;
+    const passwordHash = await bcrypt.hash(password, saltRounds);
+
+    // Create user with TEACHER role
+    const user = await User.create({
+      name: name.trim(),
+      email: email.toLowerCase(),
+      username: finalUsername,
+      passwordHash,
+      role: 'TEACHER',
+      schoolId,
+      status: 'ACTIVE'
+    });
+
+    // Create Teacher record linked to the User
+    // Note: Teacher model doesn't have email field, email is stored in User model
+    const teacherData = {
+      name: name.trim(),
+      userId: user._id,
+      mobile: mobile.trim(),
+      schoolId,
+      status: 'ACTIVE'
+    };
+
+    if (classId) {
+      // Validate classId format
+      if (!mongoose.Types.ObjectId.isValid(classId)) {
+        // Delete the user we just created since teacher creation will fail
+        await User.findByIdAndDelete(user._id);
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid class ID format'
+        });
+      }
+
+      // Get active session for validation
+      const activeSession = await getActiveSession(schoolId);
+
+      // Verify the class exists and belongs to the school and active session
+      const classObj = await Class.findOne({
+        _id: classId,
+        schoolId: schoolId
+      });
+
+      if (!classObj) {
+        // Delete the user we just created
+        await User.findByIdAndDelete(user._id);
+        return res.status(400).json({
+          success: false,
+          message: 'Class not found'
+        });
+      }
+
+      // Ensure class belongs to the active session
+      if (classObj.sessionId.toString() !== activeSession._id.toString()) {
+        // Delete the user we just created
+        await User.findByIdAndDelete(user._id);
+        return res.status(400).json({
+          success: false,
+          message: 'Cannot assign teacher to a class from an inactive session'
+        });
+      }
+
+      // Check if a teacher is already assigned to this class (one teacher per class)
+      const existingTeacherForClass = await Teacher.findOne({
+        classId: classId,
+        status: 'ACTIVE'
+      });
+
+      if (existingTeacherForClass) {
+        // Delete the user we just created
+        await User.findByIdAndDelete(user._id);
+        return res.status(409).json({
+          success: false,
+          message: 'A teacher is already assigned to this class. Only one teacher per class is allowed.'
+        });
+      }
+
+      teacherData.classId = classId;
+    }
+
+    if (photoUrl) {
+      teacherData.photoUrl = photoUrl.trim();
+    }
+
+    // Create Teacher record
+    let teacher;
+    try {
+      teacher = await Teacher.create(teacherData);
+    } catch (error) {
+      // If teacher creation fails, delete the user we created
+      await User.findByIdAndDelete(user._id);
+      
+      // Handle duplicate key errors (schoolId + classId unique constraint)
+      if (error.code === 11000 || error.codeName === 'DuplicateKey') {
+        const duplicateFields = Object.keys(error.keyPattern || {});
+        if (duplicateFields.includes('schoolId') && duplicateFields.includes('classId')) {
+          return res.status(409).json({
+            success: false,
+            message: 'A teacher is already assigned to this class. Only one teacher per class is allowed.'
+          });
+        }
+        // Other unique constraint violations
+        return res.status(409).json({
+          success: false,
+          message: 'Duplicate entry detected. Please check your input.'
+        });
+      }
+      throw error;
+    }
+  
+    res.status(201).json({
+      success: true,
+      message: 'Teacher user created successfully',
+      data: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        username: user.username,
+        role: user.role,
+        schoolId: user.schoolId,
+        status: user.status,
+        teacherId: teacher._id
+      }
+    });
+  } catch (error) {
+    // Handle duplicate key errors (email or username from User.create)
+    if (error.code === 11000 || error.codeName === 'DuplicateKey') {
+      const duplicateFields = Object.keys(error.keyPattern || {});
+      let errorMessage = 'Duplicate entry detected';
+      
+      if (duplicateFields.length > 0) {
+        const fieldMessages = duplicateFields.map(field => {
+          if (field === 'email' || (typeof field === 'string' && field.includes('email'))) {
+            return 'Email';
+          }
+          if (field === 'username' || (typeof field === 'string' && field.includes('username'))) {
+            return 'Username';
+          }
+          return field;
+        });
+        
+        if (fieldMessages.length > 1) {
+          errorMessage = `${fieldMessages.join(' and ')} already exist`;
+        } else {
+          errorMessage = `${fieldMessages[0]} already exists`;
+        }
+      }
+      
+      return res.status(409).json({
+        success: false,
+        message: errorMessage
+      });
+    }
+
+    // Handle validation errors
+    if (error.name === 'ValidationError') {
+      const messages = Object.values(error.errors).map(val => val.message);
+      return res.status(400).json({
+        success: false,
+        message: messages.join(', ')
+      });
+    }
+
+    // Handle other errors (like active session not found, etc.)
+    if (error.message) {
+      return res.status(400).json({
+        success: false,
+        message: error.message
+      });
+    }
+
+    return next(error);
+  }
+});
+
 // @desc    Update user
 // @route   PUT /api/v1/users/:id
 // @access  Private
@@ -595,5 +878,6 @@ module.exports = {
   deleteUser,
   createTeacherUser,
   createSchoolAdminUser,
-  createTeacherUserAdmin
+  createTeacherUserAdmin,
+  createTeacherUserForSchool
 };

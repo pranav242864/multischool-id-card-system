@@ -476,7 +476,7 @@ const updateTeacher = async (teacherId, updateData, schoolId, userRole = null, u
   }
 };
 
-// Delete a teacher (soft delete by setting status to DISABLED)
+// Delete a teacher (hard delete - permanently removes from database)
 // SECURITY: Enforces strict school scoping - schoolId must match
 const deleteTeacher = async (teacherId, schoolId) => {
   // Check if school is frozen
@@ -510,11 +510,10 @@ const deleteTeacher = async (teacherId, schoolId) => {
     // Class lookup failures do not block teacher deletion
   }
 
-  // Instead of hard deleting, set status to DISABLED
-  teacher.status = 'DISABLED';
-  await teacher.save();
+  // Hard delete - permanently remove from database
+  await Teacher.findByIdAndDelete(teacherId);
 
-  return { message: 'Teacher deactivated successfully' };
+  return { message: 'Teacher deleted successfully' };
 };
 
 module.exports = {

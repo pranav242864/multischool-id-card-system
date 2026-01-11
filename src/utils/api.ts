@@ -1128,6 +1128,33 @@ export const teacherAdminAPI = {
       }
     );
   },
+
+  // Create teacher user for school (SCHOOLADMIN only)
+  createTeacherUserForSchool: async (teacherData: {
+    name: string;
+    email: string;
+    password: string;
+    mobile: string;
+    classId?: string;
+    photoUrl?: string;
+    username?: string;
+  }) => {
+    return apiRequest<{ success: boolean; data: any; message: string }>(
+      '/users/teacher-for-school',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          name: teacherData.name,
+          email: teacherData.email,
+          password: teacherData.password,
+          mobile: teacherData.mobile,
+          classId: teacherData.classId,
+          photoUrl: teacherData.photoUrl,
+          username: teacherData.username,
+        }),
+      }
+    );
+  },
 };
 
 // ============================================================================

@@ -4,6 +4,7 @@ const { generateExcelTemplate } = require('../utils/excelGenerator');
 const { validateTemplateTags } = require('../utils/templateTagValidator');
 const { createTemplate, getActiveTemplate: getActiveTemplateService, getTemplates: getTemplatesService } = require('../services/template.service');
 const { getSchoolIdForOperation } = require('../utils/getSchoolId');
+const { getActiveSession } = require('../utils/sessionUtils');
 const asyncHandler = require('../utils/asyncHandler');
 const { isSuperadmin } = require('../utils/roleGuards');
 const { logAudit } = require('../utils/audit.helper');
@@ -160,14 +161,41 @@ exports.getTemplates = asyncHandler(async (req, res) => {
     });
   }
 
-  if (!req.activeSession) {
+  // Get active session - try from req.activeSession first (for admins), 
+  // otherwise get it directly (for teachers)
+  let sessionId;
+  if (req.activeSession) {
+    sessionId = req.activeSession._id;
+  } else {
+    // For teachers or when activeSessionMiddleware is not used, get active session directly
+    try {
+      const activeSession = await getActiveSession(schoolId);
+      sessionId = activeSession._id;
+    } catch (error) {
+      // If no active session exists, return templates from all sessions for the school
+      // This allows teachers to view templates even if no active session exists
+      const query = { schoolId };
+      if (type) {
+        const validTypes = ['STUDENT', 'TEACHER', 'SCHOOLADMIN'];
+        if (!validTypes.includes(type)) {
     return res.status(400).json({
       success: false,
-      message: 'Active session is required'
+            message: `Template type must be one of: ${validTypes.join(', ')}`
     });
+        }
+        query.type = type;
   }
 
-  const sessionId = req.activeSession._id;
+      const templates = await Template.find(query)
+        .sort({ createdAt: -1 });
+      
+      return res.status(200).json({
+        success: true,
+        count: templates.length,
+        data: templates
+      });
+    }
+  }
 
   if (type) {
     const validTypes = ['STUDENT', 'TEACHER', 'SCHOOLADMIN'];
@@ -351,15 +379,24 @@ exports.getActiveTemplate = asyncHandler(async (req, res) => {
     });
   }
 
-  // Get active session
-  if (!req.activeSession) {
-    return res.status(400).json({
+  // Get active session - try from req.activeSession first (for admins), 
+  // otherwise get it directly (for teachers)
+  let sessionId;
+  if (req.activeSession) {
+    sessionId = req.activeSession._id;
+  } else {
+    // For teachers or when activeSessionMiddleware is not used, get active session directly
+    try {
+      const activeSession = await getActiveSession(schoolId);
+      sessionId = activeSession._id;
+    } catch (error) {
+      // If no active session exists, return 404 with helpful message
+      return res.status(404).json({
       success: false,
-      message: 'Active session is required'
+        message: 'No active session found for this school. Please contact your administrator to activate a session.'
     });
+    }
   }
-
-  const sessionId = req.activeSession._id;
 
   // Get active template
   const template = await getActiveTemplateService(schoolId, sessionId, type);
@@ -449,15 +486,24 @@ exports.downloadExcelTemplateByType = asyncHandler(async (req, res) => {
     });
   }
 
-  // Get active session
-  if (!req.activeSession) {
-    return res.status(400).json({
+  // Get active session - try from req.activeSession first (for admins), 
+  // otherwise get it directly (for teachers)
+  let sessionId;
+  if (req.activeSession) {
+    sessionId = req.activeSession._id;
+  } else {
+    // For teachers or when activeSessionMiddleware is not used, get active session directly
+    try {
+      const activeSession = await getActiveSession(schoolId);
+      sessionId = activeSession._id;
+    } catch (error) {
+      // If no active session exists, return 404 with helpful message
+      return res.status(404).json({
       success: false,
-      message: 'Active session is required'
+        message: 'No active session found for this school. Please contact your administrator to activate a session.'
     });
+    }
   }
-
-  const sessionId = req.activeSession._id;
 
   // Get active template
   const template = await getActiveTemplateService(schoolId, sessionId, type);

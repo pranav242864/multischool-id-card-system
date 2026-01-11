@@ -48,16 +48,16 @@ export function ManageSchools() {
           const isFrozen = school.frozen === true || school.frozen === 'true';
           
           return {
-            _id: school._id,
-            id: school._id,
-            name: school.name,
-            city: school.city || '',
-            address: school.address || '',
-            contactEmail: school.contactEmail || '',
-            adminName: school.adminName || '',
-            adminEmail: school.adminEmail || school.contactEmail || '',
-            studentCount: school.studentCount || 0,
-            status: (school.status || 'active').toLowerCase() as 'active' | 'inactive',
+          _id: school._id,
+          id: school._id,
+          name: school.name,
+          city: school.city || '',
+          address: school.address || '',
+          contactEmail: school.contactEmail || '',
+          adminName: school.adminName || '',
+          adminEmail: school.adminEmail || school.contactEmail || '',
+          studentCount: school.studentCount || 0,
+          status: (school.status || 'active').toLowerCase() as 'active' | 'inactive',
             frozen: isFrozen,
           };
         });

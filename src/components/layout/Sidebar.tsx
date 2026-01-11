@@ -49,6 +49,7 @@ export function Sidebar({ userRole, currentView, onNavigate, isOpen, onToggle }:
 
   const teacherItems = [
     { id: 'dashboard', label: 'My Class', icon: LayoutDashboard },
+    { id: 'templates', label: 'ID Card Templates', icon: FileText },
     { id: 'notices', label: 'Notices', icon: Bell },
     { id: 'bulk', label: 'Bulk Operations', icon: Upload },
   ];

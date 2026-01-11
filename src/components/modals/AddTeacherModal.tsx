@@ -16,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../ui/select';
-import { teacherAPI, APIError } from '../../utils/api';
+import { teacherAPI, teacherAdminAPI, getUserRole, APIError } from '../../utils/api';
 
 interface Teacher {
   _id?: string;
@@ -102,22 +102,50 @@ export function AddTeacherModal({ isOpen, onClose, teacher, classes, onSave }: A
         await teacherAPI.updateTeacher(teacher._id, updateData);
       } else {
         // Create new teacher
-        if (!formData.userId || !formData.userId.trim()) {
-          setError('User ID is required to create a teacher. Please provide an existing user ID.');
-          setLoading(false);
-          return;
+        const userRole = getUserRole();
+        
+        // Check if user is school admin - if so, create user and teacher together
+        if (userRole === 'SCHOOLADMIN' || userRole === 'schooladmin') {
+          // School admin can create teacher user directly
+          if (!formData.password || !formData.password.trim()) {
+            setError('Password is required to create a teacher user.');
+            setLoading(false);
+            return;
+          }
+
+          if (formData.password.length < 6) {
+            setError('Password must be at least 6 characters long.');
+            setLoading(false);
+            return;
+          }
+
+          await teacherAdminAPI.createTeacherUserForSchool({
+            name: formData.name.trim(),
+            email: formData.email.trim(),
+            mobile: formData.mobile.trim(),
+            password: formData.password.trim(),
+            classId: formData.classId || undefined,
+            photoUrl: formData.photoUrl.trim() || undefined,
+          });
+        } else {
+          // Superadmin or others need to provide userId
+          if (!formData.userId || !formData.userId.trim()) {
+            setError('User ID is required to create a teacher. Please provide an existing user ID.');
+            setLoading(false);
+            return;
+          }
+
+          const teacherData = {
+            name: formData.name.trim(),
+            email: formData.email.trim(),
+            mobile: formData.mobile.trim(),
+            userId: formData.userId.trim(),
+            classId: formData.classId || undefined,
+            photoUrl: formData.photoUrl.trim() || undefined,
+          };
+
+          await teacherAPI.createTeacher(teacherData);
         }
-
-        const teacherData = {
-          name: formData.name.trim(),
-          email: formData.email.trim(),
-          mobile: formData.mobile.trim(),
-          userId: formData.userId.trim(),
-          classId: formData.classId || undefined,
-          photoUrl: formData.photoUrl.trim() || undefined,
-        };
-
-        await teacherAPI.createTeacher(teacherData);
       }
       
       // Close modal and trigger parent to re-fetch
@@ -144,14 +172,6 @@ export function AddTeacherModal({ isOpen, onClose, teacher, classes, onSave }: A
           </div>
         )}
 
-        {!teacher && (
-          <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md mt-4">
-            <p className="text-sm text-yellow-600">
-              <strong>Note:</strong> Teacher creation requires an existing User ID. 
-              School Admins cannot create users directly. Use bulk import or contact Superadmin to create teacher users.
-            </p>
-          </div>
-        )}
 
         <form onSubmit={handleSubmit} className="space-y-6 mt-4">
           {/* Basic Information */}
@@ -170,33 +190,69 @@ export function AddTeacherModal({ isOpen, onClose, teacher, classes, onSave }: A
 
             {!teacher && (
               <>
-                <div>
-                  <Label htmlFor="email" className="mb-2 block">Email *</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    placeholder="teacher@example.com"
-                    required
-                    disabled={loading}
-                  />
-                </div>
+                {(getUserRole() === 'SCHOOLADMIN' || getUserRole() === 'schooladmin') ? (
+                  <>
+                    <div>
+                      <Label htmlFor="email" className="mb-2 block">Email *</Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        value={formData.email}
+                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                        placeholder="teacher@example.com"
+                        required
+                        disabled={loading}
+                      />
+                    </div>
 
-                <div>
-                  <Label htmlFor="userId" className="mb-2 block">User ID *</Label>
-                  <Input
-                    id="userId"
-                    value={formData.userId}
-                    onChange={(e) => setFormData({ ...formData, userId: e.target.value })}
-                    placeholder="Existing user ID (ObjectId)"
-                    required
-                    disabled={loading}
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Must be an existing User ID with role TEACHER
-                  </p>
-                </div>
+                    <div>
+                      <Label htmlFor="password" className="mb-2 block">Password *</Label>
+                      <Input
+                        id="password"
+                        type="password"
+                        value={formData.password}
+                        onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                        placeholder="Enter password (min 6 characters)"
+                        required
+                        disabled={loading}
+                        minLength={6}
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Password must be at least 6 characters long
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <Label htmlFor="email" className="mb-2 block">Email *</Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        value={formData.email}
+                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                        placeholder="teacher@example.com"
+                        required
+                        disabled={loading}
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="userId" className="mb-2 block">User ID *</Label>
+                      <Input
+                        id="userId"
+                        value={formData.userId}
+                        onChange={(e) => setFormData({ ...formData, userId: e.target.value })}
+                        placeholder="Existing user ID (ObjectId)"
+                        required
+                        disabled={loading}
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Must be an existing User ID with role TEACHER
+                      </p>
+                    </div>
+                  </>
+                )}
               </>
             )}
 

@@ -6,7 +6,7 @@ import { Badge } from '../ui/badge';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { AddStudentModal } from '../modals/AddStudentModal';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { templateAPI, bulkImportAPI, studentAPI, noticeAPI, APIError, getUserRole } from '../../utils/api';
+import { templateAPI, bulkImportAPI, studentAPI, noticeAPI, teacherAPI, APIError, getUserRole } from '../../utils/api';
 import ExcelJS from 'exceljs';
 
 interface Student {
@@ -45,6 +45,9 @@ export function TeacherDashboard() {
   const [loadingStudents, setLoadingStudents] = useState(true);
   const [studentsError, setStudentsError] = useState<string | null>(null);
   const [assignedClass, setAssignedClass] = useState<string>('');
+  const [assignedClassId, setAssignedClassId] = useState<string | null>(null);
+  const [hasAssignedClass, setHasAssignedClass] = useState<boolean>(false);
+  const [loadingTeacherInfo, setLoadingTeacherInfo] = useState(true);
   const [notices, setNotices] = useState<any[]>([]);
   const [loadingNotices, setLoadingNotices] = useState(true);
   const [noticesError, setNoticesError] = useState<string | null>(null);
@@ -70,9 +73,52 @@ export function TeacherDashboard() {
     fetchNotices();
   }, []);
 
+  // Fetch teacher's assigned class information
+  useEffect(() => {
+    const fetchTeacherInfo = async () => {
+      setLoadingTeacherInfo(true);
+      try {
+        const response = await teacherAPI.getTeachers();
+        if (response.success && response.data && response.data.length > 0) {
+          const teacher = response.data[0]; // Teachers get only their own profile
+          
+          if (teacher.classId) {
+            // Teacher has an assigned class
+            setAssignedClass(teacher.classId.className || 'Unnamed Class');
+            setAssignedClassId(teacher.classId._id || teacher.classId);
+            setHasAssignedClass(true);
+          } else {
+            // Teacher has no assigned class
+            setAssignedClass('');
+            setAssignedClassId(null);
+            setHasAssignedClass(false);
+          }
+        } else {
+          // No teacher record found
+          setHasAssignedClass(false);
+        }
+      } catch (err) {
+        const apiError = err as APIError;
+        console.error('Failed to load teacher info:', apiError.message);
+        setHasAssignedClass(false);
+      } finally {
+        setLoadingTeacherInfo(false);
+      }
+    };
+
+    fetchTeacherInfo();
+  }, []);
+
   // Fetch students for teacher's assigned class
   useEffect(() => {
     const fetchStudents = async () => {
+      // Only fetch students if teacher has an assigned class
+      if (!hasAssignedClass) {
+        setLoadingStudents(false);
+        setStudents([]);
+        return;
+      }
+
       setLoadingStudents(true);
       setStudentsError(null);
       try {
@@ -90,11 +136,6 @@ export function TeacherDashboard() {
             dob: student.dob ? new Date(student.dob).toISOString().split('T')[0] : '',
           }));
           setStudents(mappedStudents);
-          
-          // Set assigned class from first student's class (if available)
-          if (mappedStudents.length > 0 && mappedStudents[0].classId?.className) {
-            setAssignedClass(mappedStudents[0].classId.className);
-          }
         }
       } catch (err) {
         const apiError = err as APIError;
@@ -105,7 +146,7 @@ export function TeacherDashboard() {
     };
 
     fetchStudents();
-  }, []);
+  }, [hasAssignedClass]);
 
   const handleEdit = (student: Student) => {
     setEditingStudent(student);
@@ -412,10 +453,30 @@ export function TeacherDashboard() {
             </Badge>
           )}
         </div>
+        {loadingTeacherInfo ? (
+          <p className="text-gray-600">Loading class information...</p>
+        ) : hasAssignedClass ? (
         <p className="text-gray-600">Manage your assigned class students</p>
+        ) : (
+          <p className="text-gray-600">No class assigned</p>
+        )}
       </div>
 
-      {/* Stats */}
+      {/* No Class Assigned Message */}
+      {!loadingTeacherInfo && !hasAssignedClass && (
+        <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <GraduationCap className="w-8 h-8 text-gray-400" />
+          </div>
+          <h2 className="text-gray-900 text-lg font-semibold mb-2">No Class Assigned</h2>
+          <p className="text-gray-600 mb-4">
+            You are not currently assigned to any class. Please contact your administrator to get assigned to a class.
+          </p>
+        </div>
+      )}
+
+      {/* Stats - Only show if teacher has assigned class */}
+      {hasAssignedClass && (
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white rounded-lg border border-gray-200 p-6">
           <div className="flex items-center gap-3">
@@ -455,8 +516,10 @@ export function TeacherDashboard() {
           </div>
         </div>
       </div>
+      )}
 
-      {/* Tabs for Student List and Bulk Operations */}
+      {/* Tabs for Student List and Bulk Operations - Only show if teacher has assigned class */}
+      {hasAssignedClass && (
       <Tabs defaultValue="students" className="w-full">
         <TabsList className="grid w-full max-w-md grid-cols-2">
           <TabsTrigger value="students">Student List</TabsTrigger>
@@ -823,6 +886,7 @@ export function TeacherDashboard() {
           </Tabs>
         </TabsContent>
       </Tabs>
+      )}
 
       {/* Add/Edit Modal */}
       <AddStudentModal

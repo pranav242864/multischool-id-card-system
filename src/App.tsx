@@ -19,6 +19,7 @@ import { BulkOperations } from './components/schooladmin/BulkOperations';
 import { BulkOperations as SuperadminBulkOperations } from './components/superadmin/BulkOperations';
 import { TemplateManagement } from './components/schooladmin/TemplateManagement';
 import { TemplateManagement as SuperadminTemplateManagement } from './components/superadmin/TemplateManagement';
+import { TemplateManagement as TeacherTemplateManagement } from './components/teacher/TemplateManagement';
 import { LoginLogs } from './components/superadmin/LoginLogs';
 import { TeacherDashboard } from './components/teacher/TeacherDashboard';
 import { ManageNotices as TeacherManageNotices } from './components/teacher/ManageNotices';
@@ -110,15 +111,15 @@ export default function App() {
 
     const superadminOnlyViews = ['schools', 'sessions', 'admins', 'logs'];
     const adminOnlyViews = ['classes', 'students', 'teachers', 'templates', 'bulk'];
-    const teacherAllowedViews = ['dashboard', 'notices', 'bulk'];
+    const teacherAllowedViews = ['dashboard', 'notices', 'bulk', 'templates'];
     
     // Guard: Prevent non-superadmin from accessing superadmin-only views
     if (superadminOnlyViews.includes(currentView) && currentUser.role !== 'superadmin') {
       setCurrentView('dashboard');
     }
     
-    // Guard: Prevent teachers from accessing admin-only views (except bulk and notices which are allowed)
-    if (adminOnlyViews.includes(currentView) && currentUser.role === 'teacher' && currentView !== 'bulk') {
+    // Guard: Prevent teachers from accessing admin-only views (except bulk, notices, and templates which are allowed)
+    if (adminOnlyViews.includes(currentView) && currentUser.role === 'teacher' && currentView !== 'bulk' && currentView !== 'templates') {
       setCurrentView('dashboard');
     }
     
@@ -134,7 +135,7 @@ export default function App() {
     // Define admin-only views
     const superadminOnlyViews = ['schools', 'sessions', 'admins', 'logs'];
     const adminOnlyViews = ['classes', 'students', 'teachers', 'templates', 'bulk'];
-    const teacherAllowedViews = ['dashboard', 'notices', 'bulk'];
+    const teacherAllowedViews = ['dashboard', 'notices', 'bulk', 'templates'];
     
     // Guard: Prevent non-superadmin from accessing superadmin-only views
     if (superadminOnlyViews.includes(currentView) && currentUser.role !== 'superadmin') {
@@ -143,8 +144,8 @@ export default function App() {
         : <TeacherDashboard />;
     }
     
-    // Guard: Prevent teachers from accessing admin-only views (except bulk and notices which are allowed)
-    if (adminOnlyViews.includes(currentView) && currentUser.role === 'teacher' && currentView !== 'bulk') {
+    // Guard: Prevent teachers from accessing admin-only views (except bulk, notices, and templates which are allowed)
+    if (adminOnlyViews.includes(currentView) && currentUser.role === 'teacher' && currentView !== 'bulk' && currentView !== 'templates') {
       return <TeacherDashboard />;
     }
     
@@ -214,6 +215,8 @@ export default function App() {
           return <TeacherManageNotices />;
         case 'bulk':
           return <TeacherBulkOperations />;
+        case 'templates':
+          return <TeacherTemplateManagement />;
         default:
           return <TeacherDashboard />;
       }

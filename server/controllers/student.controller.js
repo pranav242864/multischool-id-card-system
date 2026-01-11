@@ -80,19 +80,11 @@ const createStudent = asyncHandler(async (req, res, next) => {
 
     // For Teacher role: Verify teacher is assigned to this class
     if (isTeacher(req.user)) {
-      // Get user's email to find Teacher record
-      const user = await User.findById(req.user.id);
-      if (!user) {
-        return res.status(404).json({
-          success: false,
-          message: 'User not found'
-        });
-      }
-
-      // Find teacher record by email
+      // Find teacher record by userId (not email, as Teacher model uses userId)
       const teacher = await Teacher.findOne({
-        email: user.email,
-        schoolId: schoolId
+        userId: req.user.id,
+        schoolId: schoolId,
+        status: 'ACTIVE'
       });
 
       if (!teacher) {
@@ -111,7 +103,7 @@ const createStudent = asyncHandler(async (req, res, next) => {
       }
 
       // Verify teacher is active
-      if (teacher.status !== 'active') {
+      if (teacher.status !== 'ACTIVE') {
         return res.status(403).json({
           success: false,
           message: 'Your teacher account is inactive'
@@ -247,19 +239,11 @@ const getStudents = asyncHandler(async (req, res, next) => {
   try {
     // For Teacher role: Restrict to their assigned class
     if (isTeacher(req.user)) {
-      // Get user's email to find Teacher record
-      const user = await User.findById(req.user.id);
-      if (!user) {
-        return res.status(404).json({
-          success: false,
-          message: 'User not found'
-        });
-      }
-
-      // Find teacher record by email
+      // Find teacher record by userId (not email, as Teacher model uses userId)
       const teacher = await Teacher.findOne({
-        email: user.email,
-        schoolId: schoolId
+        userId: req.user.id,
+        schoolId: schoolId,
+        status: 'ACTIVE'
       });
 
       if (!teacher || !teacher.classId) {
@@ -365,37 +349,21 @@ const updateStudent = asyncHandler(async (req, res, next) => {
   }
 
   try {
-    // For Teacher role: Verify teacher is assigned to the student's class
-    if (isTeacher(req.user)) {
-      // Get user's email to find Teacher record
-      const user = await User.findById(req.user.id);
-      if (!user) {
-        return res.status(404).json({
-          success: false,
-          message: 'User not found'
+      // For Teacher role: Verify teacher is assigned to the student's class
+      if (isTeacher(req.user)) {
+        // Find teacher record by userId (not email, as Teacher model uses userId)
+        const teacher = await Teacher.findOne({
+          userId: req.user.id,
+          schoolId: schoolId,
+          status: 'ACTIVE'
         });
-      }
 
-      // Find teacher record by email
-      const teacher = await Teacher.findOne({
-        email: user.email,
-        schoolId: schoolId
-      });
-
-      if (!teacher) {
-        return res.status(403).json({
-          success: false,
-          message: 'Teacher record not found'
-        });
-      }
-
-      // Verify teacher is active
-      if (teacher.status !== 'active') {
-        return res.status(403).json({
-          success: false,
-          message: 'Your teacher account is inactive'
-        });
-      }
+        if (!teacher) {
+          return res.status(403).json({
+            success: false,
+            message: 'Teacher record not found or inactive'
+          });
+        }
 
       // Get the student to check their current class
       const Student = require('../models/Student');
@@ -778,7 +746,7 @@ const bulkPromoteStudents = asyncHandler(async (req, res, next) => {
     }
 
     // Check if target class is frozen
-    const { checkClassNotFrozen } = require('./class.service');
+    const { checkClassNotFrozen } = require('../services/class.service');
     checkClassNotFrozen(targetClass, 'promote');
 
     // Fetch students to promote

@@ -281,13 +281,9 @@ const unfreezeSchoolController = asyncHandler(async (req, res, next) => {
 });
 
 /**
- * Delete a school (soft delete - sets status=inactive)
- * Soft deletes school and all related entities:
- * - Students
- * - Teachers
- * - Classes
- * - Sessions
- * - Users (except Superadmin)
+ * Delete a school (hard delete - permanently removes from database)
+ * Permanently deletes school from the database.
+ * Note: Related entities are not automatically deleted.
  * 
  * @route DELETE /api/v1/schools/:id
  * @access Private - Superadmin only

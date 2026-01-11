@@ -167,13 +167,9 @@ async function unfreezeSchool(schoolId) {
 }
 
 /**
- * Delete a school (soft delete - sets status=inactive)
- * Soft deletes school and all related entities:
- * - Students
- * - Teachers
- * - Classes
- * - Sessions
- * - Users (except Superadmin)
+ * Delete a school (hard delete - permanently removes from database)
+ * Permanently deletes school from the database.
+ * Note: Related entities (students, teachers, classes, sessions, users) are not automatically deleted.
  * 
  * @param {String} schoolId - School ID
  * @returns {Promise<Object>} - { schoolId, message }
@@ -185,21 +181,13 @@ async function deleteSchool(schoolId) {
     throw new Error('School not found');
   }
 
-  if (school.status !== 'active') {
-    throw new Error('School already deleted');
-  }
-
   // Check if school is frozen
   if (school.frozen) {
     throw new Error('Cannot delete a frozen school. Please unfreeze the school first.');
   }
 
-  // Soft delete - set status to inactive
-  school.status = 'inactive';
-  await school.save();
-
-  // Note: Related entities (students, teachers, classes, sessions, users) should be soft deleted
-  // This is handled by cascade delete logic or scheduled jobs (not implemented here)
+  // Hard delete - permanently remove from database
+  await School.findByIdAndDelete(schoolId);
 
   return {
     schoolId: school._id,

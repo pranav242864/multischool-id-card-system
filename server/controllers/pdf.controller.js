@@ -105,21 +105,53 @@ const generateBulkStudentPDF = asyncHandler(async (req, res) => {
   const schoolId = getSchoolIdForOperation(req);
   const activeSession = await getActiveSession(schoolId);
 
+  // For teachers, only allow generating PDFs for students in their assigned class
+  let teacherClassId = null;
+  if (req.user.role === 'TEACHER') {
+    const teacher = await Teacher.findOne({
+      userId: req.user._id,
+      schoolId: schoolId,
+      status: 'ACTIVE'
+    });
+    if (teacher && teacher.classId) {
+      teacherClassId = teacher.classId;
+    } else {
+      return res.status(403).json({
+        success: false,
+        message: 'You are not assigned to any class. Please contact your administrator.'
+      });
+    }
+  }
+
   let students;
   if (req.body.studentIds && Array.isArray(req.body.studentIds) && req.body.studentIds.length > 0) {
-    students = await Student.find({
+    const studentFilter = {
       _id: { $in: req.body.studentIds },
       schoolId: schoolId,
       sessionId: activeSession._id
-    })
+    };
+    
+    // For teachers, filter by their assigned class
+    if (teacherClassId) {
+      studentFilter.classId = teacherClassId;
+    }
+    
+    students = await Student.find(studentFilter)
       .populate('classId', 'className')
       .populate('sessionId', 'sessionName')
       .populate('schoolId', 'name');
   } else {
-    students = await Student.find({
+    const studentFilter = {
       schoolId: schoolId,
       sessionId: activeSession._id
-    })
+    };
+    
+    // For teachers, filter by their assigned class
+    if (teacherClassId) {
+      studentFilter.classId = teacherClassId;
+    }
+    
+    students = await Student.find(studentFilter)
       .populate('classId', 'className')
       .populate('sessionId', 'sessionName')
       .populate('schoolId', 'name');

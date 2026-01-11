@@ -17,7 +17,7 @@ router.get(
 
 router.post(
   '/students/bulk',
-  requireRole('SUPERADMIN', 'SCHOOLADMIN'),
+  requireRole('SUPERADMIN', 'SCHOOLADMIN', 'TEACHER'),
   generateBulkStudentPDF
 );
 
