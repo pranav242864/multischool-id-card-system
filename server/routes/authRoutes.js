@@ -246,6 +246,26 @@ router.post('/login', async (req, res) => {
           message: 'Invalid credentials'
         });
       }
+
+      // SECURITY: Check if school is active (not deleted)
+      if (user.schoolId.status !== 'active') {
+        failureReason = 'school_deleted';
+        await logLoginAttempt({
+          email: user.email,
+          username: user.username,
+          role: user.role,
+          schoolId: user.schoolId._id,
+          ipAddress,
+          success: false,
+          loginMethod: 'email_password',
+          failureReason
+        });
+
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied: Your school account has been deactivated. Please contact the administrator.'
+        });
+      }
       
       let allowedLogin = await AllowedLogin.findOne({ schoolId: user.schoolId._id });
       if (!allowedLogin) {
@@ -686,6 +706,25 @@ router.post('/google', async (req, res) => {
         return res.status(401).json({
           success: false,
           message: 'Invalid credentials'
+        });
+      }
+
+      // SECURITY: Check if school is active (not deleted)
+      if (user.schoolId.status !== 'active') {
+        await logLoginAttempt({
+          email: user.email,
+          username: user.username,
+          role: user.role,
+          schoolId: user.schoolId._id,
+          ipAddress,
+          success: false,
+          loginMethod: 'google_oauth',
+          failureReason: 'school_deleted'
+        });
+
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied: Your school account has been deactivated. Please contact the administrator.'
         });
       }
       

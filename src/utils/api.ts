@@ -346,6 +346,7 @@ export const templateAPI = {
     name: string;
     type: string;
     layoutConfig: any;
+    dataTags?: string[];
     sessionId?: string;
     classId?: string;
     isActive?: boolean;
@@ -433,6 +434,22 @@ export const bulkImportAPI = {
       { schoolId }
     );
   },
+
+  // Export data to Excel file
+  exportExcel: async (
+    entityType: string,
+    schoolId?: string
+  ): Promise<Blob> => {
+    const response = await apiRequest<Blob>(
+      `/bulk-export/${entityType}`,
+      {
+        method: 'GET',
+      },
+      { schoolId },
+      true // Return blob
+    );
+    return response;
+  },
 };
 
 // ============================================================================
@@ -459,6 +476,52 @@ export const bulkImageUploadAPI = {
       },
       { schoolId }
     );
+  },
+};
+
+// ============================================================================
+// BULK PDF GENERATION API
+// ============================================================================
+
+export const bulkPDFAPI = {
+  // Generate bulk student ID cards PDF
+  generateBulkStudentPDF: async (
+    studentIds?: string[],
+    schoolId?: string
+  ): Promise<Blob> => {
+    const response = await apiRequest<Blob>(
+      '/pdf/students/bulk',
+      {
+        method: 'POST',
+        body: JSON.stringify({ studentIds }),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      },
+      { schoolId },
+      true // Return blob
+    );
+    return response;
+  },
+
+  // Generate bulk teacher ID cards PDF
+  generateBulkTeacherPDF: async (
+    teacherIds?: string[],
+    schoolId?: string
+  ): Promise<Blob> => {
+    const response = await apiRequest<Blob>(
+      '/pdf/teachers/bulk',
+      {
+        method: 'POST',
+        body: JSON.stringify({ teacherIds }),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      },
+      { schoolId },
+      true // Return blob
+    );
+    return response;
   },
 };
 
@@ -578,6 +641,18 @@ export const studentAPI = {
       {
         method: 'POST',
         body: JSON.stringify({ ids: studentIds }),
+      },
+      { schoolId }
+    );
+  },
+
+  // Bulk promote students to a new class
+  bulkPromoteStudents: async (studentIds: string[], targetClassId: string, schoolId?: string) => {
+    return apiRequest<{ success: boolean; message: string; results: any }>(
+      '/students/bulk-promote',
+      {
+        method: 'POST',
+        body: JSON.stringify({ studentIds, targetClassId }),
       },
       { schoolId }
     );

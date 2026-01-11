@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react';
 import { DataTable, Column } from '../ui/DataTable';
 import { Button } from '../ui/button';
-import { Plus, Edit, Trash2, Eye, CreditCard, ImageIcon, School, GraduationCap, ChevronRight, Loader2 } from 'lucide-react';
+import { Plus, Edit, Trash2, Eye, CreditCard, School, GraduationCap, ChevronRight, Loader2, RefreshCw, Download, ArrowUp } from 'lucide-react';
 import { AddStudentModal } from '../modals/AddStudentModal';
-import { ImageWithFallback } from '../figma/ImageWithFallback';
-import { schoolAPI, studentAPI, classAPI, pdfAPI, previewAPI, downloadBlob, APIError } from '../../utils/api';
+import { schoolAPI, studentAPI, classAPI, pdfAPI, previewAPI, bulkImportAPI, downloadBlob, APIError } from '../../utils/api';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 
 interface Student {
@@ -42,6 +41,12 @@ export function ManageStudents() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [selectedStudents, setSelectedStudents] = useState<Set<string>>(new Set());
   const [generatingBulkPdf, setGeneratingBulkPdf] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [isPromotionModalOpen, setIsPromotionModalOpen] = useState(false);
+  const [isPromoting, setIsPromoting] = useState(false);
+  const [selectedTargetClass, setSelectedTargetClass] = useState<string>('');
+  const [targetClassName, setTargetClassName] = useState<string>('');
+  const [targetSection, setTargetSection] = useState<string>('');
 
   useEffect(() => {
     const fetchSchools = async () => {
@@ -63,51 +68,90 @@ export function ManageStudents() {
     fetchSchools();
   }, []);
 
-  useEffect(() => {
-    if (selectedSchoolId) {
-      const fetchData = async () => {
-        setLoading(true);
-        setError(null);
-        try {
-          // Fetch classes for the school
-          const classesResponse = await classAPI.getClasses({ schoolId: selectedSchoolId });
-          if (classesResponse.success && classesResponse.data) {
-            setClasses(classesResponse.data);
-          }
+  const fetchData = async () => {
+    if (!selectedSchoolId) return;
+    
+    setLoading(true);
+    setError(null);
+    try {
+      // Fetch classes for the school
+      const classesResponse = await classAPI.getClasses({ schoolId: selectedSchoolId });
+      if (classesResponse.success && classesResponse.data) {
+        setClasses(classesResponse.data);
+      }
 
-          // Fetch students for the school
-          const studentsResponse = await studentAPI.getStudents({ schoolId: selectedSchoolId });
-          if (studentsResponse.success && studentsResponse.data) {
-            // Map backend data to frontend format
-            const mappedStudents = studentsResponse.data.map((student: any) => ({
-              _id: student._id,
-              id: student._id,
-              admissionNo: student.admissionNo,
-              photo: student.photoUrl,
-              photoUrl: student.photoUrl,
-              name: student.name,
-              class: student.classId?.className || 'N/A',
-              classId: student.classId,
-              school: student.schoolId?.name || 'N/A',
-              schoolId: student.schoolId,
-              session: student.sessionId?.sessionName || 'N/A',
-              sessionId: student.sessionId,
-              fatherName: student.fatherName || '',
-              mobile: student.mobile || '',
-              dob: student.dob ? new Date(student.dob).toISOString().split('T')[0] : '',
-            }));
-            setStudents(mappedStudents);
+      // Fetch students for the school
+      const studentsResponse = await studentAPI.getStudents({ schoolId: selectedSchoolId });
+      console.log('[FRONTEND] API Response:', studentsResponse);
+      
+      if (studentsResponse.success && studentsResponse.data) {
+        console.log('[FRONTEND] Students data received:', studentsResponse.data);
+        
+        // Map backend data to frontend format
+        const mappedStudents = studentsResponse.data.map((student: any) => {
+          console.log(`[FRONTEND] Processing student ${student.admissionNo}:`, {
+            photoUrl: student.photoUrl,
+            photo: student.photo,
+            hasPhotoUrl: !!student.photoUrl,
+            photoUrlType: typeof student.photoUrl
+          });
+          
+          // Get photoUrl from student object (check multiple possible locations)
+          let photoUrl = student.photoUrl || student.photo || null;
+          
+          console.log(`[FRONTEND] Student ${student.admissionNo} - Initial photoUrl:`, photoUrl);
+          
+          // Convert photoUrl to use API base URL if it's a relative path
+          if (photoUrl) {
+            // If it's a relative path, convert to full URL using API base
+            if (photoUrl.startsWith('/uploads/')) {
+              const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api/v1';
+              const baseUrl = API_BASE_URL.replace('/api/v1', '');
+              photoUrl = `${baseUrl}${photoUrl}`;
+              console.log(`[FRONTEND] Student ${student.admissionNo} - Converted relative path to:`, photoUrl);
+            } else {
+              console.log(`[FRONTEND] Student ${student.admissionNo} - Keeping full URL as is:`, photoUrl);
+            }
+          } else {
+            console.log(`[FRONTEND] Student ${student.admissionNo} - No photoUrl found`);
           }
-        } catch (err) {
-          const apiError = err as APIError;
-          setError(apiError.message || 'Failed to load data');
-        } finally {
-          setLoading(false);
-        }
-      };
-
-      fetchData();
+          
+          const mappedStudent = {
+            _id: student._id,
+            id: student._id,
+            admissionNo: student.admissionNo,
+            photo: photoUrl,
+            photoUrl: photoUrl,
+            name: student.name,
+            class: student.classId?.className || 'N/A',
+            classId: student.classId,
+            school: student.schoolId?.name || 'N/A',
+            schoolId: student.schoolId,
+            session: student.sessionId?.sessionName || 'N/A',
+            sessionId: student.sessionId,
+            fatherName: student.fatherName || '',
+            mobile: student.mobile || '',
+            dob: student.dob ? new Date(student.dob).toISOString().split('T')[0] : '',
+          };
+          
+          console.log(`[FRONTEND] Student ${student.admissionNo} - Mapped student photoUrl:`, mappedStudent.photoUrl);
+          
+          return mappedStudent;
+        });
+        
+        console.log('[FRONTEND] Mapped students:', mappedStudents);
+        setStudents(mappedStudents);
+      }
+    } catch (err) {
+      const apiError = err as APIError;
+      setError(apiError.message || 'Failed to load data');
+    } finally {
+      setLoading(false);
     }
+  };
+
+  useEffect(() => {
+    fetchData();
   }, [selectedSchoolId]);
 
   // Refresh classes when modal opens to ensure newly created classes are available
@@ -285,6 +329,148 @@ export function ManageStudents() {
     setSelectedStudents(newSelected);
   };
 
+  const handleSelectAll = () => {
+    const allStudentIds = filteredStudents.map(student => student._id || student.id).filter(Boolean) as string[];
+    setSelectedStudents(new Set(allStudentIds));
+  };
+
+  const handleExportExcel = async () => {
+    if (!selectedSchoolId) {
+      setError('Please select a school first');
+      return;
+    }
+
+    setIsExporting(true);
+    setError(null);
+
+    try {
+      const blob = await bulkImportAPI.exportExcel('student', selectedSchoolId);
+      const timestamp = new Date().toISOString().split('T')[0];
+      const filename = `students_export_${timestamp}.xlsx`;
+      downloadBlob(blob, filename);
+    } catch (err) {
+      const apiError = err as APIError;
+      setError(apiError.message || 'Failed to export data');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleBulkPromote = async () => {
+    if (selectedStudents.size === 0 || !selectedSchoolId) {
+      setError('Please select at least one student');
+      return;
+    }
+
+    if (!targetClassName || targetClassName.trim() === '') {
+      setError('Please enter a target class name');
+      return;
+    }
+
+    // Find the target class by name
+    const targetClass = classes.find((cls: any) => {
+      const className = (cls.className || cls.name || '').trim().toLowerCase();
+      const inputName = targetClassName.trim().toLowerCase();
+      return className === inputName;
+    });
+
+    if (!targetClass) {
+      setError(`Class "${targetClassName}" not found. Please enter a valid class name.`);
+      return;
+    }
+
+    // Validate: Check if promotion is allowed (no demotion)
+    const currentClass = classes.find((cls: any) => (cls.className || cls.name) === selectedClass);
+    
+    if (currentClass && targetClass) {
+      const currentClassName = currentClass.className || currentClass.name;
+      const targetClassName = targetClass.className || targetClass.name;
+      const currentClassNumber = extractClassNumber(currentClassName);
+      const targetClassNumber = extractClassNumber(targetClassName);
+
+      if (currentClassNumber !== null && targetClassNumber !== null) {
+        if (targetClassNumber < currentClassNumber) {
+          setError('Class demotion is not allowed. You can only promote students to a higher class.');
+          return;
+        }
+      }
+    }
+
+    setIsPromoting(true);
+    setError(null);
+
+    try {
+      const studentIds = Array.from(selectedStudents);
+      const targetClassId = targetClass._id || targetClass.id;
+      const response = await studentAPI.bulkPromoteStudents(studentIds, targetClassId, selectedSchoolId);
+      
+      if (response.success) {
+        // Refresh the data
+        await fetchData();
+        setSelectedStudents(new Set());
+        setSelectedTargetClass('');
+        setTargetClassName('');
+        setTargetSection('');
+        setIsPromotionModalOpen(false);
+        // Show success message
+        setError(null);
+        alert(response.message || `Successfully promoted ${response.results?.success || 0} student(s)`);
+      }
+    } catch (err) {
+      const apiError = err as APIError;
+      setError(apiError.message || 'Failed to promote students');
+    } finally {
+      setIsPromoting(false);
+    }
+  };
+
+  // Extract class number from class name (e.g., "Class 1 A" -> 1, "Class 10" -> 10)
+  const extractClassNumber = (className: string): number | null => {
+    if (!className) return null;
+    const match = className.match(/\d+/);
+    return match ? parseInt(match[0]) : null;
+  };
+
+  // Get available classes for promotion (only higher classes, no demotion)
+  const getAvailableClassesForPromotion = () => {
+    if (!selectedClass || !classes.length) return classes;
+    
+    const currentClass = classes.find((cls: any) => (cls.className || cls.name) === selectedClass);
+    if (!currentClass) return classes;
+
+    const currentClassName = currentClass.className || currentClass.name;
+    const currentClassNumber = extractClassNumber(currentClassName);
+
+    // Filter classes: only show higher classes (promotion only, no demotion)
+    return classes.filter((cls: any) => {
+      const classId = cls._id || cls.id;
+      const currentClassId = currentClass._id || currentClass.id;
+      
+      // Exclude current class
+      if (classId === currentClassId) return false;
+
+      // If we can extract class numbers, only allow promotion (higher class number)
+      if (currentClassNumber !== null) {
+        const targetClassNumber = extractClassNumber(cls.className || cls.name);
+        if (targetClassNumber !== null) {
+          // Only allow promotion to higher classes
+          return targetClassNumber > currentClassNumber;
+        }
+      }
+
+      // If we can't determine class numbers, allow all other classes
+      return true;
+    }).sort((a: any, b: any) => {
+      // Sort by class number if available
+      const numA = extractClassNumber(a.className || a.name);
+      const numB = extractClassNumber(b.className || b.name);
+      if (numA !== null && numB !== null) {
+        return numA - numB;
+      }
+      return (a.className || a.name).localeCompare(b.className || b.name);
+    });
+  };
+
   const columns: Column<Student>[] = [
     {
       key: 'select',
@@ -304,15 +490,42 @@ export function ManageStudents() {
     {
       key: 'photo',
       header: 'Photo',
-      render: (student) => (
-        <div className="w-10 h-10 bg-gray-200 rounded-lg flex items-center justify-center overflow-hidden">
-          {student.photo || student.photoUrl ? (
-            <ImageWithFallback src={student.photo || student.photoUrl || ''} alt={student.name} className="w-full h-full object-cover" />
-          ) : (
-            <ImageIcon className="w-5 h-5 text-gray-400" />
-          )}
-        </div>
-      ),
+      render: (student) => {
+        // Get photoUrl directly from student object - check all possible fields
+        const photoSrc = student.photoUrl || student.photo || null;
+        
+        console.log(`[FRONTEND_RENDER] Rendering photo for ${student.admissionNo}:`, {
+          photoSrc,
+          photoUrl: student.photoUrl,
+          photo: student.photo,
+          hasPhotoSrc: !!photoSrc
+        });
+        
+        return (
+          <div className="w-10 h-10 bg-gray-200 rounded-lg flex items-center justify-center overflow-hidden">
+            {photoSrc ? (
+              <img 
+                src={photoSrc} 
+                alt={student.name} 
+                className="w-full h-full object-cover"
+                onLoad={() => {
+                  console.log(`[FRONTEND_RENDER] Image loaded successfully for ${student.admissionNo}:`, photoSrc);
+                }}
+                onError={(e) => {
+                  console.error(`[FRONTEND_RENDER] Image failed to load for ${student.admissionNo}:`, photoSrc);
+                  console.error(`[FRONTEND_RENDER] Error event:`, e);
+                  // If image fails to load, show nothing (no placeholder)
+                  e.currentTarget.style.display = 'none';
+                }}
+              />
+            ) : (
+              <div className="w-full h-full bg-gray-300 flex items-center justify-center">
+                <span className="text-xs text-gray-500">No Photo</span>
+              </div>
+            )}
+          </div>
+        );
+      },
     },
     {
       key: 'admissionNo',
@@ -501,6 +714,37 @@ export function ManageStudents() {
             <h1 className="text-gray-900 mb-2 text-2xl font-bold">Manage Students</h1>
             <p className="text-gray-600">Select a class to view its students</p>
           </div>
+          {selectedSchoolId && (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                onClick={handleExportExcel}
+                disabled={isExporting || loading}
+                className="flex items-center gap-2"
+              >
+                {isExporting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Exporting...
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4" />
+                    Export Excel
+                  </>
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={fetchData}
+                disabled={loading}
+                className="flex items-center gap-2"
+              >
+                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                Refresh
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Back Button */}
@@ -589,38 +833,118 @@ export function ManageStudents() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-gray-900 mb-2 text-2xl font-bold">Manage Students</h1>
-          <p className="text-gray-600">
-            {selectedSchool} - {selectedClass}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {selectedStudents.size > 0 && (
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-gray-900 mb-2 text-2xl font-bold">Manage Students</h1>
+            <p className="text-gray-600">
+              {selectedSchool} - {selectedClass}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
             <Button
-              onClick={handleBulkPDF}
-              className="bg-green-600 hover:bg-green-700"
-              disabled={generatingBulkPdf || !selectedSchoolId}
+              variant="outline"
+              onClick={handleExportExcel}
+              disabled={isExporting || loading || !selectedSchoolId}
+              className="flex items-center gap-2"
             >
-              {generatingBulkPdf ? (
+              {isExporting ? (
                 <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Generating...
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Exporting...
                 </>
               ) : (
                 <>
-                  <CreditCard className="w-4 h-4 mr-2" />
-                  Generate PDFs ({selectedStudents.size})
+                  <Download className="w-4 h-4" />
+                  Export Excel
                 </>
               )}
             </Button>
-          )}
-          <Button onClick={() => setIsModalOpen(true)} className="bg-blue-600 hover:bg-blue-700">
-            <Plus className="w-4 h-4 mr-2" />
-            Add New Student
-          </Button>
+            <Button 
+              variant="outline"
+              onClick={fetchData}
+              disabled={loading || !selectedSchoolId}
+              className="flex items-center gap-2"
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+            <Button onClick={() => setIsModalOpen(true)} className="bg-blue-600 hover:bg-blue-700">
+              <Plus className="w-4 h-4 mr-2" />
+              Add New Student
+            </Button>
+          </div>
         </div>
+
+        {/* Bulk Actions Bar - Always visible when students are selected */}
+        {selectedStudents.size > 0 && (
+          <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-purple-900">
+                  {selectedStudents.size} student{selectedStudents.size !== 1 ? 's' : ''} selected
+                </span>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button
+                  variant="outline"
+                  onClick={handleBulkPDF}
+                  className="text-gray-600 hover:text-gray-900"
+                  disabled={generatingBulkPdf || !selectedSchoolId}
+                >
+                  {generatingBulkPdf ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <CreditCard className="w-4 h-4 mr-2" />
+                      Generate PDFs
+                    </>
+                  )}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setSelectedTargetClass('');
+                    setIsPromotionModalOpen(true);
+                  }}
+                  className="text-gray-600 hover:text-gray-900"
+                  disabled={isPromoting || !selectedSchoolId}
+                  title="Promote selected students to a new class"
+                >
+                  {isPromoting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Promoting...
+                    </>
+                  ) : (
+                    <>
+                      <ArrowUp className="w-4 h-4 mr-2" />
+                      Bulk Promote
+                    </>
+                  )}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleSelectAll}
+                  className="text-gray-600 hover:text-gray-900"
+                  disabled={filteredStudents.length === 0}
+                >
+                  Select All
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setSelectedStudents(new Set())}
+                  className="text-gray-600 hover:text-gray-900"
+                >
+                  Clear Selection
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Breadcrumb Navigation */}
@@ -720,23 +1044,37 @@ export function ManageStudents() {
               }
               const studentsResponse = await studentAPI.getStudents({ schoolId: selectedSchoolId });
               if (studentsResponse.success && studentsResponse.data) {
-                const mappedStudents = studentsResponse.data.map((student: any) => ({
-                  _id: student._id,
-                  id: student._id,
-                  admissionNo: student.admissionNo,
-                  photo: student.photoUrl,
-                  photoUrl: student.photoUrl,
-                  name: student.name,
-                  class: student.classId?.className || 'N/A',
-                  classId: student.classId,
-                  school: student.schoolId?.name || 'N/A',
-                  schoolId: student.schoolId,
-                  session: student.sessionId?.sessionName || 'N/A',
-                  sessionId: student.sessionId,
-                  fatherName: student.fatherName || '',
-                  mobile: student.mobile || '',
-                  dob: student.dob ? new Date(student.dob).toISOString().split('T')[0] : '',
-                }));
+                const mappedStudents = studentsResponse.data.map((student: any) => {
+                  // Get photoUrl directly from backend response
+                  let photoUrl = student.photoUrl || null;
+                  
+                  // Convert photoUrl to use API base URL if it's a relative path
+                  if (photoUrl) {
+                    // If it's a relative path, convert to full URL using API base
+                    if (photoUrl.startsWith('/uploads/')) {
+                      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api/v1';
+                      const baseUrl = API_BASE_URL.replace('/api/v1', '');
+                      photoUrl = `${baseUrl}${photoUrl}`;
+                    }
+                  }
+                  
+                  return {
+                    _id: student._id,
+                    id: student._id,
+                    admissionNo: student.admissionNo,
+                    photoUrl: photoUrl, // Store photoUrl directly
+                    name: student.name,
+                    class: student.classId?.className || 'N/A',
+                    classId: student.classId,
+                    school: student.schoolId?.name || 'N/A',
+                    schoolId: student.schoolId,
+                    session: student.sessionId?.sessionName || 'N/A',
+                    sessionId: student.sessionId,
+                    fatherName: student.fatherName || '',
+                    mobile: student.mobile || '',
+                    dob: student.dob ? new Date(student.dob).toISOString().split('T')[0] : '',
+                  };
+                });
                 setStudents(mappedStudents);
               }
             } catch (err) {
@@ -770,6 +1108,122 @@ export function ManageStudents() {
                 Preview not available
               </div>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Promotion Modal */}
+      <Dialog open={isPromotionModalOpen} onOpenChange={(open) => {
+        setIsPromotionModalOpen(open);
+        if (!open) {
+          setSelectedTargetClass('');
+          setTargetSection('');
+          setError(null);
+        }
+      }}>
+        <DialogContent className="max-w-md flex flex-col max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle>Bulk Promote Students</DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto space-y-4 pr-2">
+            <p className="text-sm text-gray-600">
+              Promote {selectedStudents.size} selected student(s). Only class promotion and section change are allowed. Class demotion is not allowed.
+            </p>
+            
+            {error && (
+              <div className="bg-red-50 border border-red-200 rounded-md p-3">
+                <p className="text-sm text-red-600">{error}</p>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Target Class <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={targetClassName}
+                onChange={(e) => {
+                  setTargetClassName(e.target.value);
+                  setError(null);
+                }}
+                placeholder="e.g., Class 2, Class 3, Class 10"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                disabled={isPromoting}
+                list="availableClasses"
+              />
+              <datalist id="availableClasses">
+                {getAvailableClassesForPromotion().map((cls: any) => (
+                  <option key={cls._id} value={cls.className || cls.name} />
+                ))}
+              </datalist>
+              <p className="text-xs text-gray-500 mt-1">
+                Current class: {selectedClass || 'N/A'} • Enter a higher class name (promotion only, no demotion)
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Section (Optional)
+              </label>
+              <input
+                type="text"
+                value={targetSection}
+                onChange={(e) => {
+                  // Allow only letters (A-Z, a-z) and numbers
+                  const value = e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+                  setTargetSection(value);
+                  setError(null);
+                }}
+                placeholder="e.g., A, B, C, 1, 2"
+                maxLength={5}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                disabled={isPromoting}
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Enter section if changing section within the same class (e.g., A, B, C, 1, 2)
+              </p>
+            </div>
+
+            {isPromoting && (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+                <span className="ml-2 text-sm text-gray-600">Promoting students...</span>
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-2 pt-4 mt-4 border-t border-gray-200 shrink-0">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsPromotionModalOpen(false);
+                setSelectedTargetClass('');
+                setTargetClassName('');
+                setTargetSection('');
+                setError(null);
+              }}
+              disabled={isPromoting}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleBulkPromote}
+              className="bg-purple-600 hover:bg-purple-700 text-white"
+              disabled={isPromoting || !targetClassName || targetClassName.trim() === ''}
+            >
+              {isPromoting ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Promoting...
+                </>
+              ) : (
+                <>
+                  <ArrowUp className="w-4 h-4 mr-2" />
+                  Promote Students
+                </>
+              )}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

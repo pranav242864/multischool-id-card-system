@@ -282,9 +282,28 @@ const getStudents = asyncHandler(async (req, res, next) => {
 
     const result = await getStudentsService(schoolId, classId, parseInt(page), parseInt(limit));
 
+    // Convert Mongoose documents to plain objects and ensure photoUrl is included
+    const studentsWithPhotoUrl = result.students.map(student => {
+      const studentObj = student.toObject ? student.toObject() : student;
+      
+      // Log photoUrl for debugging
+      console.log(`[GET_STUDENTS] Student ${studentObj.admissionNo} - photoUrl from DB:`, studentObj.photoUrl);
+      console.log(`[GET_STUDENTS] Student ${studentObj.admissionNo} - photoUrl type:`, typeof studentObj.photoUrl);
+      
+      // Explicitly include photoUrl field - it should be present if saved
+      const studentWithPhoto = {
+        ...studentObj,
+        photoUrl: studentObj.photoUrl || undefined // Use undefined instead of null for cleaner JSON
+      };
+      
+      console.log(`[GET_STUDENTS] Student ${studentObj.admissionNo} - photoUrl in response:`, studentWithPhoto.photoUrl);
+      
+      return studentWithPhoto;
+    });
+
     res.status(200).json({
       success: true,
-      data: result.students,
+      data: studentsWithPhotoUrl,
       pagination: result.pagination
     });
   } catch (error) {
@@ -690,10 +709,180 @@ const bulkDeleteStudents = asyncHandler(async (req, res, next) => {
   });
 });
 
+// Bulk promote students to a new class
+const bulkPromoteStudents = asyncHandler(async (req, res, next) => {
+  const { studentIds, targetClassId } = req.body;
+
+  // Validate required fields
+  if (!Array.isArray(studentIds) || studentIds.length === 0) {
+    return res.status(400).json({
+      success: false,
+      message: 'studentIds must be a non-empty array'
+    });
+  }
+
+  if (!targetClassId) {
+    return res.status(400).json({
+      success: false,
+      message: 'targetClassId is required'
+    });
+  }
+
+  // Validate ObjectId formats
+  if (!mongoose.Types.ObjectId.isValid(targetClassId)) {
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid target class ID format'
+    });
+  }
+
+  const invalidIds = studentIds.filter(id => !mongoose.Types.ObjectId.isValid(id));
+  if (invalidIds.length > 0) {
+    return res.status(400).json({
+      success: false,
+      message: `Invalid student ID format: ${invalidIds.join(', ')}`
+    });
+  }
+
+  // Get schoolId from req.user context
+  let schoolId;
+  try {
+    schoolId = getSchoolIdForOperation(req);
+  } catch (error) {
+    return res.status(400).json({
+      success: false,
+      message: error.message
+    });
+  }
+
+  const Student = require('../models/Student');
+  const Class = require('../models/Class');
+  const { getActiveSession } = require('../utils/sessionUtils');
+
+  try {
+    // Get active session
+    const activeSession = await getActiveSession(schoolId);
+
+    // Verify target class exists and belongs to the school and active session
+    const targetClass = await Class.findOne({
+      _id: targetClassId,
+      schoolId: schoolId,
+      sessionId: activeSession._id
+    });
+
+    if (!targetClass) {
+      return res.status(404).json({
+        success: false,
+        message: 'Target class not found or does not belong to the active session'
+      });
+    }
+
+    // Check if target class is frozen
+    const { checkClassNotFrozen } = require('./class.service');
+    checkClassNotFrozen(targetClass, 'promote');
+
+    // Fetch students to promote
+    const students = await Student.find({
+      _id: { $in: studentIds },
+      schoolId: schoolId,
+      sessionId: activeSession._id
+    }).populate('classId', 'className frozen');
+
+    if (students.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'No students found to promote'
+      });
+    }
+
+    const results = {
+      total: studentIds.length,
+      success: 0,
+      failed: 0,
+      errors: []
+    };
+
+    // Process each promotion
+    for (const student of students) {
+      try {
+        // Check if source class is frozen
+        if (student.classId && student.classId.frozen) {
+          results.failed++;
+          results.errors.push({
+            studentId: student._id.toString(),
+            studentName: student.name,
+            error: `Cannot promote student from frozen class: ${student.classId.className}`
+          });
+          continue;
+        }
+
+        // Skip if already in target class
+        if (student.classId && student.classId._id.toString() === targetClassId) {
+          results.failed++;
+          results.errors.push({
+            studentId: student._id.toString(),
+            studentName: student.name,
+            error: 'Student is already in the target class'
+          });
+          continue;
+        }
+
+        // Update student's class
+        await updateStudentService(student._id.toString(), { classId: targetClassId }, schoolId, req.user.role);
+        results.success++;
+      } catch (error) {
+        results.failed++;
+        results.errors.push({
+          studentId: student._id.toString(),
+          studentName: student.name,
+          error: error.message || 'Failed to promote student'
+        });
+      }
+    }
+
+    // Audit log: bulk promote students
+    await logAudit({
+      action: 'BULK_PROMOTE_STUDENTS',
+      entityType: 'STUDENT',
+      entityId: null,
+      req,
+      metadata: { 
+        count: studentIds.length,
+        successCount: results.success,
+        failedCount: results.failed,
+        targetClassId: targetClassId
+      }
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `Successfully promoted ${results.success} out of ${results.total} student(s)`,
+      results: results
+    });
+  } catch (error) {
+    if (error.message.includes('No active session found')) {
+      return res.status(400).json({
+        success: false,
+        message: error.message
+      });
+    }
+
+    if (error.message.includes('frozen class')) {
+      return res.status(403).json({
+        success: false,
+        message: error.message
+      });
+    }
+
+    next(error);
+  }
+});
+
 module.exports = {
   createStudent,
   getStudents,
   updateStudent,
   deleteStudent,
-  bulkDeleteStudents
+  bulkDeleteStudents,
+  bulkPromoteStudents
 };

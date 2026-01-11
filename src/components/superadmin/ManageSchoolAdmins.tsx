@@ -114,10 +114,10 @@ export function ManageSchoolAdmins() {
       } catch (err) {
         const apiError = err as APIError;
         setError(apiError.message || 'Failed to load admins');
-        setAdmins([]);
+      setAdmins([]);
       } finally {
         setLoadingAdmins(false);
-      }
+    }
     };
 
     fetchAdmins();

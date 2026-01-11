@@ -4,7 +4,7 @@ import { Upload, Download, FileSpreadsheet, Image, CheckCircle2, XCircle, Loader
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Label } from '../ui/label';
-import { templateAPI, bulkImportAPI, schoolAPI, APIError } from '../../utils/api';
+import { templateAPI, bulkImportAPI, bulkImageUploadAPI, bulkPDFAPI, schoolAPI, APIError } from '../../utils/api';
 import ExcelJS from 'exceljs';
 
 type EntityType = 'teacher' | 'student';
@@ -31,7 +31,10 @@ export function BulkOperations({ userRole }: BulkOperationsProps) {
   const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
-  const [importResult, setImportResult] = useState<{ success: number; failed: number; message: string } | null>(null);
+  const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [importResult, setImportResult] = useState<{ success: number; failed: number; message: string; errors?: Array<{ row: number; error: string; data?: any }> } | null>(null);
+  const [photoUploadResult, setPhotoUploadResult] = useState<{ success: number; failed: number; message: string } | null>(null);
   const [recentImports, setRecentImports] = useState<Array<{ file: string; records: number; status: 'success' | 'error'; date: string }>>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -140,8 +143,11 @@ export function BulkOperations({ userRole }: BulkOperationsProps) {
     const fieldMapping: Record<string, string> = {
       // Student fields
       studentName: 'Student Name',
+      name: 'Student Name',
       admissionNo: 'Admission Number',
-      class: 'Class',
+      class: 'Class Name',
+      className: 'Class Name',
+      classId: 'Class ID',
       fatherName: "Father's Name",
       motherName: "Mother's Name",
       dob: 'Date of Birth',
@@ -153,9 +159,7 @@ export function BulkOperations({ userRole }: BulkOperationsProps) {
       aadhaar: 'Aadhaar Number',
       
       // Teacher fields
-      name: 'Name',
       email: 'Email',
-      classId: 'Class ID',
       schoolId: 'School ID',
     };
 
@@ -175,7 +179,9 @@ export function BulkOperations({ userRole }: BulkOperationsProps) {
       case 'teacher':
         return ['name', 'email', 'mobile', 'classId', 'schoolId'];
       default: // student
-        return ['admissionNo', 'studentName', 'class', 'fatherName', 'mobile', 'dob'];
+        // Required fields: admissionNo, name, dob, fatherName, motherName, mobile, address, className
+        // Optional fields: aadhaar, photoUrl
+        return ['admissionNo', 'name', 'className', 'fatherName', 'motherName', 'dob', 'mobile', 'address', 'aadhaar', 'photoUrl'];
     }
   };
 
@@ -232,8 +238,20 @@ export function BulkOperations({ userRole }: BulkOperationsProps) {
         throw new Error('No fields available for template generation.');
       }
 
+      // For student imports, ensure required fields are always included
+      if (entityType === 'student') {
+        const requiredFields = ['admissionNo', 'name', 'className', 'fatherName', 'motherName', 'dob', 'mobile', 'address'];
+        
+        // Add required fields that are missing
+        requiredFields.forEach(field => {
+          if (!dataTags.includes(field)) {
+            dataTags.push(field);
+          }
+        });
+      }
+
       // Generate Excel file using ID Card Template fields as columns
-      const headers = dataTags.map(tag => getFieldHeader(tag));
+      let headers = dataTags.map(tag => getFieldHeader(tag));
       
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('Template');
@@ -290,18 +308,33 @@ export function BulkOperations({ userRole }: BulkOperationsProps) {
       return;
     }
 
+    if (!selectedSchool) {
+      setError('Please select a school first');
+      return;
+    }
+
+    // Get school ID from selected school name
+    const school = schools.find(s => s.name === selectedSchool);
+    const schoolId = school?._id || school?.id;
+
+    if (!schoolId) {
+      setError('Unable to find selected school. Please try again.');
+      return;
+    }
+
     setIsImporting(true);
     setError(null);
     setImportResult(null);
 
     try {
-      const response = await bulkImportAPI.importExcel(xlsxFile, entityType);
+      const response = await bulkImportAPI.importExcel(xlsxFile, entityType, schoolId);
       
       if (response.success) {
         const result = {
           success: response.results.success,
           failed: response.results.failed,
-          message: response.message
+          message: response.message,
+          errors: response.results.errors || []
         };
         setImportResult(result);
         
@@ -327,6 +360,107 @@ export function BulkOperations({ userRole }: BulkOperationsProps) {
       setImportResult(null);
     } finally {
       setIsImporting(false);
+    }
+  };
+
+  const handleUploadPhotos = async () => {
+    if (!photoFiles || photoFiles.length === 0) {
+      setError('Please select photos to upload');
+      return;
+    }
+
+    if (!selectedSchool) {
+      setError('Please select a school first');
+      return;
+    }
+
+    // Get school ID from selected school name
+    const school = schools.find(s => s.name === selectedSchool);
+    const schoolId = school?._id || school?.id;
+
+    if (!schoolId) {
+      setError('Unable to find selected school. Please try again.');
+      return;
+    }
+
+    setIsUploadingPhotos(true);
+    setError(null);
+    setPhotoUploadResult(null);
+
+    try {
+      // Convert FileList to File array
+      const filesArray = Array.from(photoFiles);
+      const entityTypeForUpload = entityType === 'student' ? 'students' : 'teachers';
+      
+      const response = await bulkImageUploadAPI.uploadImages(filesArray, entityTypeForUpload, schoolId);
+      
+      if (response.success) {
+        const result = {
+          success: response.results.success,
+          failed: response.results.failed,
+          message: response.message
+        };
+        setPhotoUploadResult(result);
+        
+        // Clear the file input after successful upload
+        setPhotoFiles(null);
+        const fileInput = document.getElementById('photo-upload') as HTMLInputElement;
+        if (fileInput) {
+          fileInput.value = '';
+        }
+      } else {
+        setError(response.message || 'Photo upload failed');
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to upload photos';
+      setError(errorMessage);
+      setPhotoUploadResult(null);
+    } finally {
+      setIsUploadingPhotos(false);
+    }
+  };
+
+  const handleGenerateBulkPDF = async () => {
+    if (!selectedSchool) {
+      setError('Please select a school first');
+      return;
+    }
+
+    // Get school ID from selected school name
+    const school = schools.find(s => s.name === selectedSchool);
+    const schoolId = school?._id || school?.id;
+
+    if (!schoolId) {
+      setError('Unable to find selected school. Please try again.');
+      return;
+    }
+
+    setIsGeneratingPDF(true);
+    setError(null);
+
+    try {
+      let blob: Blob;
+      
+      if (entityType === 'student') {
+        blob = await bulkPDFAPI.generateBulkStudentPDF(undefined, schoolId);
+      } else {
+        blob = await bulkPDFAPI.generateBulkTeacherPDF(undefined, schoolId);
+      }
+
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${entityType === 'student' ? 'students' : 'teachers'}-id-cards.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to generate PDFs';
+      setError(errorMessage);
+    } finally {
+      setIsGeneratingPDF(false);
     }
   };
 
@@ -515,9 +649,28 @@ export function BulkOperations({ userRole }: BulkOperationsProps) {
                   }`}>
                     <p className="text-sm font-medium">{importResult.message}</p>
                     {importResult.failed > 0 && (
-                      <p className="text-xs mt-1">
-                        {importResult.success} successful, {importResult.failed} failed
-                      </p>
+                      <>
+                        <p className="text-xs mt-1">
+                          {importResult.success} successful, {importResult.failed} failed
+                        </p>
+                        {importResult.errors && importResult.errors.length > 0 && (
+                          <div className="mt-3 space-y-2">
+                            <p className="text-xs font-semibold">Error Details:</p>
+                            <div className="max-h-48 overflow-y-auto space-y-1">
+                              {importResult.errors.map((err, idx) => (
+                                <div key={idx} className="text-xs bg-red-50 p-2 rounded border border-red-200">
+                                  <p className="font-medium">Row {err.row}: {err.error}</p>
+                                  {err.data && Object.keys(err.data).length > 0 && (
+                                    <p className="text-gray-600 mt-1">
+                                      Data: {JSON.stringify(err.data).substring(0, 100)}...
+                                    </p>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 )}
@@ -696,11 +849,70 @@ export function BulkOperations({ userRole }: BulkOperationsProps) {
                   </label>
                 </div>
 
-                <Button className="w-full" disabled={!photoFiles}>
-                  <Upload className="w-4 h-4 mr-2" />
-                  Upload Photos
+                <Button 
+                  className="w-full" 
+                  disabled={!photoFiles || isUploadingPhotos}
+                  onClick={handleUploadPhotos}
+                >
+                  {isUploadingPhotos ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-4 h-4 mr-2" />
+                      Upload Photos
+                    </>
+                  )}
                 </Button>
+                {photoUploadResult && (
+                  <div className={`p-3 rounded-lg mt-2 ${
+                    photoUploadResult.failed === 0 
+                      ? 'bg-green-50 text-green-800' 
+                      : 'bg-yellow-50 text-yellow-800'
+                  }`}>
+                    <p className="text-sm font-medium">{photoUploadResult.message}</p>
+                    {photoUploadResult.failed > 0 && (
+                      <p className="text-xs mt-1">
+                        {photoUploadResult.success} successful, {photoUploadResult.failed} failed
+                      </p>
+                    )}
+                  </div>
+                )}
+                {error && !error.includes('Route') && !error.includes('not found') && (
+                  <p className="text-sm text-red-600 mt-2">{error}</p>
+                )}
               </div>
+            </div>
+
+            {/* Bulk PDF Generation */}
+            <div className="bg-white rounded-lg border border-gray-200 p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <FileSpreadsheet className="w-5 h-5 text-blue-600" />
+                <h3 className="text-gray-900">Generate ID Cards (PDF)</h3>
+              </div>
+              <p className="text-sm text-gray-600 mb-4">
+                Generate ID card PDFs for all {entityType === 'student' ? 'students' : 'teachers'} in the selected school.
+              </p>
+              
+              <Button 
+                className="w-full" 
+                disabled={!selectedSchool || isGeneratingPDF}
+                onClick={handleGenerateBulkPDF}
+              >
+                {isGeneratingPDF ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Generating PDFs...
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4 mr-2" />
+                    Generate {entityType === 'student' ? 'Student' : 'Teacher'} ID Cards
+                  </>
+                )}
+              </Button>
             </div>
 
             {/* Instructions */}

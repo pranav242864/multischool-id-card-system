@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { DataTable, Column } from '../ui/DataTable';
 import { Button } from '../ui/button';
-import { Plus, Edit, Trash2, UserCircle, School, ChevronRight } from 'lucide-react';
+import { Plus, Edit, Trash2, UserCircle, School, ChevronRight, Download, Loader2 } from 'lucide-react';
 import { Badge } from '../ui/badge';
-import { schoolAPI, teacherAPI, APIError } from '../../utils/api';
+import { schoolAPI, teacherAPI, bulkImportAPI, downloadBlob, APIError } from '../../utils/api';
 import { AddTeacherAdminModal } from '../modals/AddTeacherAdminModal';
 
 interface Teacher {
@@ -29,6 +29,7 @@ export function ManageTeachers() {
   const [schools, setSchools] = useState<any[]>([]);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
     const fetchSchools = async () => {
@@ -102,6 +103,28 @@ export function ManageTeachers() {
 
   const handleDelete = (teacherId: string) => {
     // Delete functionality to be implemented
+  };
+
+  const handleExportExcel = async () => {
+    if (!selectedSchoolId) {
+      setError('Please select a school first');
+      return;
+    }
+
+    setIsExporting(true);
+    setError(null);
+
+    try {
+      const blob = await bulkImportAPI.exportExcel('teacher', selectedSchoolId);
+      const timestamp = new Date().toISOString().split('T')[0];
+      const filename = `teachers_export_${timestamp}.xlsx`;
+      downloadBlob(blob, filename);
+    } catch (err) {
+      const apiError = err as APIError;
+      setError(apiError.message || 'Failed to export data');
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const columns: Column<Teacher>[] = [
@@ -292,18 +315,37 @@ export function ManageTeachers() {
               <p className="text-sm text-red-600">{error}</p>
             </div>
           )}
-          {/* Back Button */}
-          <Button
-            variant="outline"
-            onClick={() => {
-              setSelectedSchool('');
-              setSelectedSchoolId('');
-              setTeachers([]);
-            }}
-            className="mb-4"
-          >
-            ← Back to Schools
-          </Button>
+          <div className="flex items-center justify-between mb-4">
+            {/* Back Button */}
+            <Button
+              variant="outline"
+              onClick={() => {
+                setSelectedSchool('');
+                setSelectedSchoolId('');
+                setTeachers([]);
+              }}
+            >
+              ← Back to Schools
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleExportExcel}
+              disabled={isExporting}
+              className="flex items-center gap-2"
+            >
+              {isExporting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Exporting...
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4" />
+                  Export Excel
+                </>
+              )}
+            </Button>
+          </div>
 
           {/* School Header */}
           <div className="bg-white rounded-lg border border-gray-200 p-6">

@@ -1,5 +1,5 @@
 const express = require('express');
-const { importExcelData, exportExcelData } = require('../controllers/bulkImportController');
+const { exportExcelData } = require('../controllers/bulkImportController');
 const authMiddleware = require('../middleware/authMiddleware');
 const requireRole = require('../middleware/requireRole');
 const schoolScoping = require('../middleware/schoolScoping');
@@ -12,10 +12,11 @@ router.use(authMiddleware);
 router.use(schoolScoping);
 router.use(requireRole('SUPERADMIN', 'SCHOOLADMIN'));
 
-// @route   POST /api/v1/bulk-import/:entityType
-// @desc    Import data from Excel file
-// @access  Private - Superadmin and Schooladmin only (Teachers cannot bulk import)
-// Teachers are explicitly blocked from all bulk import operations
-router.post('/:entityType', activeSessionMiddleware, importExcelData);
+// @route   GET /api/v1/bulk-export/:entityType
+// @desc    Export data to Excel file
+// @access  Private - Superadmin and Schooladmin only
+// Note: activeSessionMiddleware is applied conditionally - it will set req.activeSession for student exports
+// For SUPERADMIN, it may bypass if schoolId is null, but controller will fetch it if needed
+router.get('/:entityType', activeSessionMiddleware, exportExcelData);
 
 module.exports = router;

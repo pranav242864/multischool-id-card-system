@@ -12,6 +12,9 @@ const asyncHandler = require('../utils/asyncHandler');
 const { logAudit } = require('../utils/audit.helper');
 const bcrypt = require('bcryptjs');
 const mongoose = require('mongoose');
+const { generateExcelExport } = require('../utils/excelGenerator');
+const { resolveTemplate } = require('../services/templateAssignment.service');
+const { getSchoolIdForOperation } = require('../utils/getSchoolId');
 
 // Configure multer for file uploads (memory storage)
 const storage = multer.memoryStorage();
@@ -37,7 +40,8 @@ const getFieldMapping = (entityType) => {
     'Name': 'name',
     'Admission Number': 'admissionNo',
     'Admission No': 'admissionNo',
-    'Class': 'class',
+    'Class': 'className',
+    'Class Name': 'className',
     "Father's Name": 'fatherName',
     'Father Name': 'fatherName',
     "Mother's Name": 'motherName',
@@ -189,19 +193,90 @@ exports.importExcelData = [
 
           if (entityType === 'student') {
             // Import student
-            // Note: classId should be provided in Excel
-            // sessionId will be automatically set to the active session
-            if (!mappedData.classId) {
-              throw new Error('Class ID is required');
+            // Get the active session for the school first (needed for class lookup)
+            const effectiveSchoolId = schoolId || mappedData.schoolId;
+            if (!effectiveSchoolId) {
+              throw new Error('School ID is required');
             }
             
-            // Get the active session for the school
-            const activeSession = await getActiveSession(schoolId || mappedData.schoolId);
+            const activeSession = await getActiveSession(effectiveSchoolId);
             
-            // Verify the class belongs to the active session and is not frozen
-            const classObj = await Class.findById(mappedData.classId);
-            if (!classObj) {
-              throw new Error('Class not found');
+            // Handle class lookup: support both Class ID and Class Name
+            let classObj = null;
+            
+            if (mappedData.classId) {
+              // If Class ID is provided, use it directly
+              classObj = await Class.findById(mappedData.classId);
+              if (!classObj) {
+                throw new Error('Class not found with the provided Class ID');
+              }
+            } else if (mappedData.className) {
+              // If Class Name is provided, look it up (flexible matching)
+              const classNameToFind = mappedData.className.trim();
+              
+              // Normalize the search term: remove common prefixes and trim
+              const normalizeClassName = (name) => {
+                return name
+                  .replace(/^class\s+/i, '') // Remove "Class " prefix (case-insensitive)
+                  .replace(/^grade\s+/i, '') // Remove "Grade " prefix
+                  .trim();
+              };
+              
+              const normalizedSearch = normalizeClassName(classNameToFind);
+              
+              // Get all active classes for this school and session (need full document for schoolId/sessionId)
+              const allClasses = await Class.find({
+                schoolId: effectiveSchoolId,
+                sessionId: activeSession._id,
+                status: 'ACTIVE'
+              });
+              
+              // Try multiple matching strategies:
+              // 1. Exact match (case-insensitive)
+              classObj = allClasses.find(c => 
+                c.className.toLowerCase() === classNameToFind.toLowerCase()
+              );
+              
+              // 2. Normalized match (removes "Class " prefix)
+              if (!classObj) {
+                classObj = allClasses.find(c => 
+                  normalizeClassName(c.className).toLowerCase() === normalizedSearch.toLowerCase()
+                );
+              }
+              
+              // 3. Partial match (contains the search term)
+              if (!classObj) {
+                classObj = allClasses.find(c => 
+                  normalizeClassName(c.className).toLowerCase().includes(normalizedSearch.toLowerCase()) ||
+                  c.className.toLowerCase().includes(classNameToFind.toLowerCase())
+                );
+              }
+              
+              // classObj is already a Mongoose document from the query, no need to fetch again
+              
+              if (!classObj) {
+                const classNames = allClasses.map(c => c.className).join(', ');
+                const classListMsg = classNames 
+                  ? ` Available classes in active session: ${classNames}`
+                  : ' No classes found in the active session. Please create the class first.';
+                
+                throw new Error(`Class "${classNameToFind}" not found in the active session.${classListMsg}`);
+              }
+              
+              // Set classId from the found class
+              mappedData.classId = classObj._id;
+            } else {
+              throw new Error('Either Class ID or Class Name is required');
+            }
+            
+            // Verify the class belongs to the active session and school
+            // Ensure classObj has the required fields (should always be true, but safety check)
+            if (!classObj || !classObj.schoolId || !classObj.sessionId) {
+              throw new Error('Class data is incomplete. Please try again or contact support.');
+            }
+            
+            if (classObj.schoolId.toString() !== effectiveSchoolId.toString()) {
+              throw new Error('Class does not belong to the specified school');
             }
             if (classObj.sessionId.toString() !== activeSession._id.toString()) {
               throw new Error('Class does not belong to the active session');
@@ -213,6 +288,9 @@ exports.importExcelData = [
             // Set schoolId and sessionId automatically
             mappedData.schoolId = classObj.schoolId;
             mappedData.sessionId = activeSession._id;
+            
+            // Remove className from mappedData (it was only used for lookup, not a student field)
+            delete mappedData.className;
             
             // Use the service to create student (which will also validate and enforce active session)
             const student = await createStudentService(mappedData);
@@ -372,3 +450,133 @@ exports.importExcelData = [
   })
 ];
 
+// @desc    Export students/teachers data to Excel
+// @route   GET /api/v1/bulk-export/:entityType
+// @access  Private - SUPERADMIN, SCHOOLADMIN
+exports.exportExcelData = asyncHandler(async (req, res) => {
+  const { entityType } = req.params;
+
+  // Validate entity type
+  const validTypes = ['student', 'teacher'];
+  if (!validTypes.includes(entityType.toLowerCase())) {
+    return res.status(400).json({
+      success: false,
+      message: `Entity type must be one of: ${validTypes.join(', ')}`
+    });
+  }
+
+  // Get schoolId from req.user context
+  let schoolId;
+  try {
+    schoolId = getSchoolIdForOperation(req);
+  } catch (error) {
+    return res.status(400).json({
+      success: false,
+      message: error.message
+    });
+  }
+
+  // Get active session (required for students)
+  let activeSession = null;
+  if (entityType.toLowerCase() === 'student') {
+    // Check if activeSession was set by middleware, otherwise fetch it
+    if (req.activeSession) {
+      activeSession = req.activeSession;
+    } else {
+      // Fetch active session for the school
+      const Session = require('../models/Session');
+      activeSession = await Session.findOne({
+        schoolId: schoolId,
+        activeStatus: true,
+        archived: false
+      });
+      
+      if (!activeSession) {
+        return res.status(403).json({
+          success: false,
+          message: 'No active session found for this school'
+        });
+      }
+    }
+  }
+
+  try {
+    // Get active template to determine columns
+    const templateType = entityType.toUpperCase() === 'STUDENT' ? 'STUDENT' : 'TEACHER';
+    let template;
+    try {
+      template = await resolveTemplate({
+        schoolId,
+        sessionId: activeSession?._id || null,
+        classId: null,
+        type: templateType
+      });
+    } catch (templateError) {
+      // If no template found, use default fields
+      console.warn('[Export] No template found, using default fields:', templateError.message);
+      template = null;
+    }
+
+    // Get dataTags from template or use defaults
+    let dataTags = [];
+    if (template && template.dataTags && template.dataTags.length > 0) {
+      dataTags = template.dataTags;
+    } else {
+      // Default fields based on entity type
+      if (entityType.toLowerCase() === 'student') {
+        dataTags = ['admissionNo', 'studentName', 'className', 'fatherName', 'motherName', 'dob', 'mobile', 'address', 'aadhaar', 'photoUrl'];
+      } else {
+        dataTags = ['name', 'email', 'mobile', 'classId', 'schoolId'];
+      }
+    }
+
+    // Fetch entities
+    let entities = [];
+    if (entityType.toLowerCase() === 'student') {
+      entities = await Student.find({ schoolId, sessionId: activeSession._id })
+        .populate('classId', 'className')
+        .populate('schoolId', 'name')
+        .populate('sessionId', 'sessionName')
+        .lean();
+    } else {
+      entities = await Teacher.find({ schoolId })
+        .populate('classId', 'className')
+        .populate('schoolId', 'name')
+        .lean();
+    }
+
+    if (!entities || entities.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: `No ${entityType}s found for export`
+      });
+    }
+
+    // Generate Excel file
+    const excelBuffer = await generateExcelExport(entities, dataTags, entityType);
+
+    // Set response headers for file download
+    const timestamp = new Date().toISOString().split('T')[0];
+    const filename = `${entityType}s_export_${timestamp}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+    // Audit log
+    await logAudit({
+      action: 'EXPORT_DATA',
+      entityType: entityType.toUpperCase(),
+      entityId: null,
+      req,
+      metadata: { count: entities.length, filename }
+    });
+
+    res.send(excelBuffer);
+  } catch (error) {
+    console.error('[Export] Error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error generating export file',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
