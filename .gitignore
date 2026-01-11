@@ -5,3 +5,4 @@ dist
 build
 coverage
 node_modules/
+server/uploads
