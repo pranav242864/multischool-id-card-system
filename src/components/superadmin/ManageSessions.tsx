@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { DataTable, Column } from '../ui/DataTable';
 import { Button } from '../ui/button';
-import { Plus, CheckCircle2, XCircle, Archive, ChevronDown, Calendar } from 'lucide-react';
+import { Plus, CheckCircle2, XCircle, Archive, ChevronDown, Calendar, Snowflake } from 'lucide-react';
 import { AddSessionModal } from '../modals/AddSessionModal';
 import { Badge } from '../ui/badge';
 import { schoolAPI, sessionAPI, APIError, getUserRole } from '../../utils/api';
@@ -24,6 +24,7 @@ interface Session {
 interface School {
   _id: string;
   name: string;
+  frozen?: boolean;
 }
 
 export function ManageSessions() {
@@ -35,6 +36,11 @@ export function ManageSessions() {
   const [selectedSchoolId, setSelectedSchoolId] = useState<string | null>(null);
   const [selectedSchoolName, setSelectedSchoolName] = useState<string>('Select School');
   const [showSchoolMenu, setShowSchoolMenu] = useState(false);
+  
+  // Get frozen status of selected school
+  const isSchoolFrozen = selectedSchoolId 
+    ? (schools.find(s => s._id === selectedSchoolId)?.frozen || false)
+    : false;
   const [searchQuery, setSearchQuery] = useState('');
   const [activatingSessionId, setActivatingSessionId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -50,6 +56,7 @@ export function ManageSessions() {
           const schoolList = response.data.map((school: any) => ({
             _id: school._id,
             name: school.name,
+            frozen: school.frozen === true || school.frozen === 'true' || false,
           }));
           setSchools(schoolList);
           // Auto-select first school if available and SUPERADMIN
@@ -253,7 +260,19 @@ export function ManageSessions() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-gray-900 mb-2 text-2xl font-bold">Manage Sessions</h1>
-          <p className="text-gray-600">Create and manage academic sessions for schools</p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-gray-600">
+              {selectedSchoolName !== 'Select School'
+                ? `Managing sessions for ${selectedSchoolName}`
+                : 'Create and manage academic sessions for schools'}
+            </p>
+            {selectedSchoolName !== 'Select School' && isSchoolFrozen && (
+              <Badge variant="outline" className="border-purple-300 text-purple-700 bg-purple-50">
+                <Snowflake className="w-3 h-3 mr-1 fill-current" />
+                School is Frozen
+              </Badge>
+            )}
+          </div>
         </div>
 
         <div className="flex gap-2 items-center">
@@ -299,9 +318,15 @@ export function ManageSessions() {
                       setSelectedSchoolName(school.name);
                       setShowSchoolMenu(false);
                     }}
-                    className={`w-full px-3 py-2 text-left text-sm ${selectedSchoolId === school._id ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-50'}`}
+                    className={`w-full px-3 py-2 text-left text-sm flex items-center justify-between ${selectedSchoolId === school._id ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-50'}`}
                   >
-                    {school.name}
+                    <span>{school.name}</span>
+                    {school.frozen && (
+                      <Badge variant="outline" className="border-purple-300 text-purple-700 bg-purple-50 ml-2">
+                        <Snowflake className="w-3 h-3 mr-1 fill-current" />
+                        Frozen
+                      </Badge>
+                    )}
                   </button>
                 ))}
               </div>

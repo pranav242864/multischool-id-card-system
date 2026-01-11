@@ -13,7 +13,7 @@ async function createSchool(schoolData) {
 }
 
 /**
- * Get all schools (only active schools)
+ * Get all schools (excludes deleted/inactive schools)
  * @param {Number} page - Page number (default: 1)
  * @param {Number} limit - Number of schools per page (default: 10)
  * @returns {Promise<Object>} - { schools, pagination }
@@ -21,12 +21,14 @@ async function createSchool(schoolData) {
 async function getSchools(page = 1, limit = 10) {
   const skip = (page - 1) * limit;
 
-  const schools = await School.find({ status: 'active' })
+  // Exclude inactive schools (these are soft-deleted schools)
+  // Return active and suspended schools, but not inactive (deleted) ones
+  const schools = await School.find({ status: { $ne: 'inactive' } })
     .sort({ createdAt: -1 })
     .skip(skip)
     .limit(parseInt(limit));
 
-  const total = await School.countDocuments({ status: 'active' });
+  const total = await School.countDocuments({ status: { $ne: 'inactive' } });
 
   return {
     schools,

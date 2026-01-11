@@ -43,19 +43,24 @@ export function ManageSchools() {
       const response = await schoolAPI.getSchools();
       if (response.success && response.data) {
         // Map backend data to frontend format
-        const mappedSchools = response.data.map((school: any) => ({
-          _id: school._id,
-          id: school._id,
-          name: school.name,
-          city: school.city || '',
-          address: school.address || '',
-          contactEmail: school.contactEmail || '',
-          adminName: school.adminName || '',
-          adminEmail: school.adminEmail || school.contactEmail || '',
-          studentCount: school.studentCount || 0,
-          status: (school.status || 'active').toLowerCase() as 'active' | 'inactive',
-          frozen: school.frozen || false,
-        }));
+        const mappedSchools = response.data.map((school: any) => {
+          // Explicitly check for frozen field - handle both boolean and undefined/null
+          const isFrozen = school.frozen === true || school.frozen === 'true';
+          
+          return {
+            _id: school._id,
+            id: school._id,
+            name: school.name,
+            city: school.city || '',
+            address: school.address || '',
+            contactEmail: school.contactEmail || '',
+            adminName: school.adminName || '',
+            adminEmail: school.adminEmail || school.contactEmail || '',
+            studentCount: school.studentCount || 0,
+            status: (school.status || 'active').toLowerCase() as 'active' | 'inactive',
+            frozen: isFrozen,
+          };
+        });
         setSchools(mappedSchools);
       }
     } catch (err) {
@@ -88,7 +93,9 @@ export function ManageSchools() {
 
   const handleFreeze = async (schoolId: string) => {
     const school = schools.find(s => (s._id || s.id) === schoolId);
-    const action = school?.frozen ? 'unfreeze' : 'freeze';
+    // Explicitly check frozen status
+    const isCurrentlyFrozen = school?.frozen === true || school?.frozen === 'true' || false;
+    const action = isCurrentlyFrozen ? 'unfreeze' : 'freeze';
     
     if (!window.confirm(`Are you sure you want to ${action} this school?`)) {
       return;
@@ -98,7 +105,7 @@ export function ManageSchools() {
     setError(null);
 
     try {
-      if (school?.frozen) {
+      if (isCurrentlyFrozen) {
         await schoolAPI.unfreezeSchool(schoolId);
       } else {
         await schoolAPI.freezeSchool(schoolId);
@@ -270,10 +277,11 @@ export function ManageSchools() {
       key: 'status',
       header: 'Status',
       render: (school) => {
+        // Explicitly check frozen status - handle boolean true, string 'true', or undefined/null
+        const isFrozen = school.frozen === true || school.frozen === 'true' || false;
         const status = (school.status || 'active').toLowerCase();
-        const isFrozen = school.frozen || false;
         
-        // If frozen, only show Frozen badge
+        // If frozen, only show Frozen badge (priority over status)
         if (isFrozen) {
           return (
             <Badge variant="outline" className="border-purple-300 text-purple-700 bg-purple-50">
@@ -298,7 +306,8 @@ export function ManageSchools() {
         const schoolId = school._id || school.id || '';
         const isDeleting = deletingSchoolId === schoolId;
         const isFreezing = freezingSchoolId === schoolId;
-        const isFrozen = school.frozen || false;
+        // Explicitly check frozen status
+        const isFrozen = school.frozen === true || school.frozen === 'true' || false;
         return (
           <div className="flex items-center gap-2">
             <Button
