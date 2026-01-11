@@ -810,6 +810,29 @@ export const schoolAPI = {
     );
   },
 
+  // Update school
+  updateSchool: async (
+    schoolId: string,
+    schoolData: {
+      name?: string;
+      address?: string;
+      contactEmail?: string;
+    }
+  ) => {
+    return apiRequest<{ success: boolean; data: any; message: string }>(
+      `/schools/${schoolId}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify({
+          name: schoolData.name,
+          address: schoolData.address,
+          contactEmail: schoolData.contactEmail,
+        }),
+      },
+      { schoolId }
+    );
+  },
+
   // Delete school
   deleteSchool: async (schoolId: string) => {
     // For DELETE, schoolId is in URL params, but schoolScoping may require query param

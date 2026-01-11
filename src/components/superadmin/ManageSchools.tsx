@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
 import { DataTable, Column } from '../ui/DataTable';
 import { Button } from '../ui/button';
-import { Plus, Edit, Trash2, MapPin, Lock, ChevronDown, School } from 'lucide-react';
+import { Plus, Edit, Trash2, MapPin, ChevronDown, School } from 'lucide-react';
 import { AddSchoolModal } from '../modals/AddSchoolModal';
-import { ChangePasswordModal } from '../modals/ChangePasswordModal';
 import { Badge } from '../ui/badge';
 import { schoolAPI, sessionAPI, APIError } from '../../utils/api';
 
@@ -25,9 +24,7 @@ export function ManageSchools() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const [editingSchool, setEditingSchool] = useState<School | null>(null);
-  const [selectedSchoolForPassword, setSelectedSchoolForPassword] = useState<School | null>(null);
   const [selectedSchools, setSelectedSchools] = useState<string[]>([]);
   const [schools, setSchools] = useState<School[]>([]);
   const [sessions, setSessions] = useState<string[]>(['All sessions']);
@@ -104,14 +101,6 @@ export function ManageSchools() {
       setError(apiError.message || 'Failed to delete school');
     } finally {
       setDeletingSchoolId(null);
-    }
-  };
-
-  const handleChangePassword = (schoolId: string) => {
-    const school = schools.find(s => (s._id || s.id) === schoolId);
-    if (school) {
-      setSelectedSchoolForPassword(school);
-      setIsPasswordModalOpen(true);
     }
   };
 
@@ -279,15 +268,6 @@ export function ManageSchools() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => handleChangePassword(schoolId)}
-              className="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
-              disabled={loading || isDeleting}
-            >
-              <Lock className="w-4 h-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
               onClick={() => handleDelete(schoolId)}
               className="text-red-600 hover:text-red-700 hover:bg-red-50"
               disabled={loading || isDeleting}
@@ -447,16 +427,7 @@ export function ManageSchools() {
           setError(null);
         }}
         school={editingSchool}
-        onSave={handleAddSchool}
-      />
-
-      <ChangePasswordModal
-        isOpen={isPasswordModalOpen}
-        onClose={() => {
-          setIsPasswordModalOpen(false);
-          setSelectedSchoolForPassword(null);
-        }}
-        school={selectedSchoolForPassword}
+        onSave={editingSchool ? handleUpdateSchool : handleAddSchool}
       />
     </div>
   );

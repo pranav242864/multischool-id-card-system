@@ -6,6 +6,7 @@ const {
   createSchool,
   getAllSchools,
   getSchool,
+  updateSchool,
   deleteSchool
 } = require('../controllers/school.controller');
 
@@ -23,6 +24,9 @@ router.get('/schools', requireRole('SUPERADMIN'), getAllSchools);
 
 // GET /api/v1/schools/:id - Get single school by ID (Superadmin only)
 router.get('/schools/:id', requireRole('SUPERADMIN'), getSchool);
+
+// PUT /api/v1/schools/:id - Update a school (Superadmin only)
+router.put('/schools/:id', requireRole('SUPERADMIN'), updateSchool);
 
 // DELETE /api/v1/schools/:id - Soft delete a school and its related data (Superadmin only)
 router.delete('/schools/:id', requireRole('SUPERADMIN'), deleteSchool);

@@ -70,14 +70,22 @@ export function AddSchoolModal({ isOpen, onClose, school, onSave }: AddSchoolMod
         contactEmail: formData.contactEmail.trim(),
       };
 
-      await schoolAPI.createSchool(schoolData);
+      if (school && (school._id || school.id)) {
+        // Update existing school
+        const schoolId = school._id || school.id;
+        await schoolAPI.updateSchool(schoolId, schoolData);
+      } else {
+        // Create new school
+        await schoolAPI.createSchool(schoolData);
+      }
       
       // Close modal and trigger parent to re-fetch
       onClose();
       onSave(schoolData as any); // Trigger re-fetch in parent
     } catch (err) {
       const apiError = err as APIError;
-      setError(apiError.message || 'Failed to create school');
+      const action = school ? 'update' : 'create';
+      setError(apiError.message || `Failed to ${action} school`);
     } finally {
       setLoading(false);
     }
@@ -141,7 +149,9 @@ export function AddSchoolModal({ isOpen, onClose, school, onSave }: AddSchoolMod
               Cancel
             </Button>
             <Button type="submit" disabled={loading}>
-              {loading ? 'Creating...' : school ? 'Update School' : 'Add School'}
+              {loading 
+                ? (school ? 'Updating...' : 'Creating...') 
+                : (school ? 'Update School' : 'Add School')}
             </Button>
           </DialogFooter>
         </form>

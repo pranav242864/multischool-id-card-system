@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { School, Users, GraduationCap, Bell, FileText, ExternalLink } from 'lucide-react';
 import { StatCard } from '../ui/StatCard';
 import { Button } from '../ui/button';
-import { schoolAPI, noticeAPI, adminAPI, teacherAPI, APIError } from '../../utils/api';
+import { schoolAPI, noticeAPI, adminAPI, teacherAPI, studentAPI, APIError } from '../../utils/api';
 
 interface SuperadminDashboardProps {
   onNavigate: (view: string) => void;
@@ -30,33 +30,55 @@ export function SuperadminDashboard({ onNavigate }: SuperadminDashboardProps) {
         if (schoolsResponse.success && schoolsResponse.data) {
           setSchools(schoolsResponse.data);
           setStats(prev => ({ ...prev, totalSchools: schoolsResponse.data.length }));
-        }
 
-        // Fetch school admins
-        const adminsResponse = await adminAPI.getSchoolAdmins();
-        if (adminsResponse.success && adminsResponse.data) {
-          setStats(prev => ({ ...prev, totalAdmins: adminsResponse.data.length }));
-        }
+          // Fetch data for each school (teachers, students, admins)
+          const schools = schoolsResponse.data;
+          let totalTeachers = 0;
+          let totalStudents = 0;
+          let totalAdmins = 0;
 
-        // Fetch teachers across all schools (SUPERADMIN can see all)
-        // Note: getTeachers requires schoolId, so we'll fetch for each school
-        let totalTeachers = 0;
-        if (schoolsResponse.success && schoolsResponse.data) {
-          const teacherPromises = schoolsResponse.data.map(async (school: any) => {
+          // Fetch teachers, students, and admins for each school
+          const schoolDataPromises = schools.map(async (school: any) => {
             try {
               const schoolId = school._id || school.id;
+              
+              // Fetch teachers for this school
               const teachersResponse = await teacherAPI.getTeachers({ schoolId });
-              if (teachersResponse.success && teachersResponse.data) {
-                return teachersResponse.data.length;
-              }
-              return 0;
+              const teacherCount = teachersResponse.success && teachersResponse.data 
+                ? teachersResponse.data.length 
+                : 0;
+
+              // Fetch students for this school
+              const studentsResponse = await studentAPI.getStudents({ schoolId, limit: 1000 });
+              const studentCount = studentsResponse.success && studentsResponse.data 
+                ? studentsResponse.data.length 
+                : 0;
+
+              // Fetch school admins for this school
+              // Backend filters by schoolId, so we just count the returned admins
+              const adminsResponse = await adminAPI.getSchoolAdmins(schoolId);
+              const adminCount = adminsResponse.success && adminsResponse.data 
+                ? adminsResponse.data.length 
+                : 0;
+
+              return { teacherCount, studentCount, adminCount };
             } catch (err) {
-              return 0;
+              return { teacherCount: 0, studentCount: 0, adminCount: 0 };
             }
           });
-          const teacherCounts = await Promise.all(teacherPromises);
-          totalTeachers = teacherCounts.reduce((sum, count) => sum + count, 0);
-          setStats(prev => ({ ...prev, totalTeachers }));
+
+          const schoolDataResults = await Promise.all(schoolDataPromises);
+          
+          totalTeachers = schoolDataResults.reduce((sum, result) => sum + result.teacherCount, 0);
+          totalStudents = schoolDataResults.reduce((sum, result) => sum + result.studentCount, 0);
+          totalAdmins = schoolDataResults.reduce((sum, result) => sum + result.adminCount, 0);
+
+          setStats(prev => ({
+            ...prev,
+            totalTeachers,
+            totalStudents,
+            totalAdmins
+          }));
         }
 
         // Fetch notices (for SUPERADMIN, no schoolId needed)

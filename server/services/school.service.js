@@ -1,4 +1,5 @@
 const School = require('../models/School');
+const mongoose = require('mongoose');
 
 /**
  * Create a new school
@@ -58,6 +59,43 @@ async function getSchoolById(schoolId) {
 }
 
 /**
+ * Update a school
+ * @param {String} schoolId - School ID
+ * @param {Object} updateData - School data to update (name, address, contactEmail)
+ * @returns {Promise<Object>} - Updated school
+ */
+async function updateSchool(schoolId, updateData) {
+  // Validate ObjectId format
+  if (!mongoose.Types.ObjectId.isValid(schoolId)) {
+    throw new Error('Invalid school ID format');
+  }
+
+  const school = await School.findById(schoolId);
+
+  if (!school) {
+    throw new Error('School not found');
+  }
+
+  if (school.status !== 'active') {
+    throw new Error('Cannot update inactive school');
+  }
+
+  // Update fields
+  if (updateData.name !== undefined) {
+    school.name = updateData.name.trim();
+  }
+  if (updateData.address !== undefined) {
+    school.address = updateData.address.trim();
+  }
+  if (updateData.contactEmail !== undefined) {
+    school.contactEmail = updateData.contactEmail.trim().toLowerCase();
+  }
+
+  await school.save();
+  return school;
+}
+
+/**
  * Delete a school (soft delete - sets status=inactive)
  * Soft deletes school and all related entities:
  * - Students
@@ -97,5 +135,6 @@ module.exports = {
   createSchool,
   getSchools,
   getSchoolById,
+  updateSchool,
   deleteSchool
 };
