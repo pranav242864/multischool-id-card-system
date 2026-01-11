@@ -322,7 +322,8 @@ export function ManageClasses() {
           <Button 
             onClick={() => setIsModalOpen(true)} 
             className="bg-blue-600 hover:bg-blue-700"
-            disabled={loading || !selectedSchoolId || !hasActiveSession || creating}
+            disabled={loading || !selectedSchoolId || !hasActiveSession || creating || isSchoolFrozen}
+            title={isSchoolFrozen ? 'Cannot add classes to a frozen school' : ''}
           >
             <Plus className="w-4 h-4 mr-2" />
             Add New Class
@@ -450,7 +451,8 @@ export function ManageClasses() {
               <Button 
                 onClick={() => setIsModalOpen(true)} 
                 variant="outline"
-                disabled={loading || creating || !hasActiveSession}
+                disabled={loading || creating || !hasActiveSession || isSchoolFrozen}
+                title={isSchoolFrozen ? 'Cannot add classes to a frozen school' : ''}
               >
                 <Plus className="w-4 h-4 mr-2" />
                 Add New Class

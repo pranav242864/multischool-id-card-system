@@ -212,7 +212,7 @@ export function ManageSessions() {
       render: (session) => {
         const sessionId = session._id || session.id || '';
         const isActivating = activatingSessionId === sessionId;
-        const isDisabled = loading || creating || isActivating || session.archived;
+        const isDisabled = loading || creating || isActivating || session.archived || isSchoolFrozen;
 
         return (
           <div className="flex items-center gap-2">
@@ -279,7 +279,8 @@ export function ManageSessions() {
           <Button 
             onClick={() => setIsModalOpen(true)} 
             className="bg-blue-600 hover:bg-blue-700"
-            disabled={loading || !selectedSchoolId || creating}
+            disabled={loading || !selectedSchoolId || creating || isSchoolFrozen}
+            title={isSchoolFrozen ? 'Cannot add sessions to a frozen school' : ''}
           >
             <Plus className="w-4 h-4 mr-2" />
             Add New Session
@@ -364,7 +365,8 @@ export function ManageSessions() {
           <Button 
             onClick={() => setIsModalOpen(true)} 
             variant="outline"
-            disabled={loading || creating}
+            disabled={loading || creating || isSchoolFrozen}
+            title={isSchoolFrozen ? 'Cannot add sessions to a frozen school' : ''}
           >
             <Plus className="w-4 h-4 mr-2" />
             Add New Session

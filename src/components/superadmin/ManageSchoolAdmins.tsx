@@ -131,11 +131,19 @@ export function ManageSchoolAdmins() {
   const filteredAdmins = admins;
 
   const handleEdit = (admin: SchoolAdmin) => {
+    if (isSchoolFrozen) {
+      setError('Cannot edit admins in a frozen school. Please unfreeze the school first.');
+      return;
+    }
     setEditingAdmin(admin);
     setIsModalOpen(true);
   };
 
   const handleDelete = async (adminId: string) => {
+    if (isSchoolFrozen) {
+      setError('Cannot delete admins from a frozen school. Please unfreeze the school first.');
+      return;
+    }
     // Confirm deletion
     if (!window.confirm('Are you sure you want to delete this admin? This action cannot be undone.')) {
       return;
@@ -391,7 +399,12 @@ export function ManageSchoolAdmins() {
             </div>
           )}
         </div>
-        <Button onClick={() => setIsModalOpen(true)} className="bg-blue-600 hover:bg-blue-700">
+        <Button 
+          onClick={() => setIsModalOpen(true)} 
+          className="bg-blue-600 hover:bg-blue-700"
+          disabled={isSchoolFrozen}
+          title={isSchoolFrozen ? 'Cannot add admins to a frozen school' : ''}
+        >
           <Plus className="w-4 h-4 mr-2" />
           Add New Admin
         </Button>
@@ -546,6 +559,8 @@ export function ManageSchoolAdmins() {
                         size="sm"
                         onClick={() => handleEdit(admin)}
                         className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                        disabled={isSchoolFrozen}
+                        title={isSchoolFrozen ? 'Cannot edit admins in a frozen school' : ''}
                       >
                         <Edit className="w-4 h-4 mr-2" />
                         Edit
@@ -555,6 +570,8 @@ export function ManageSchoolAdmins() {
                         size="sm"
                         onClick={() => handleChangePassword(adminId)}
                         className="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                        disabled={isSchoolFrozen}
+                        title={isSchoolFrozen ? 'Cannot change password for admins in a frozen school' : ''}
                       >
                         <Lock className="w-4 h-4 mr-2" />
                         Change Password
@@ -564,6 +581,8 @@ export function ManageSchoolAdmins() {
                         size="sm"
                         onClick={() => handleDelete(adminId)}
                         className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        disabled={isSchoolFrozen}
+                        title={isSchoolFrozen ? 'Cannot delete admins from a frozen school' : ''}
                       >
                         <Trash2 className="w-4 h-4 mr-2" />
                         Delete

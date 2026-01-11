@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Plus, Edit, Trash2, Eye, Upload, School, FileText, ChevronRight, UserCircle, GraduationCap, Loader2 } from 'lucide-react';
+import { Plus, Edit, Trash2, Eye, Upload, School, FileText, ChevronRight, UserCircle, GraduationCap, Loader2, Snowflake } from 'lucide-react';
 import { Checkbox } from '../ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Badge } from '../ui/badge';
@@ -59,6 +59,7 @@ export function TemplateManagement() {
             contactEmail: school.contactEmail || '',
             phone: school.phone || school.mobile || school.contactEmail || '',
             city: school.city || '',
+            frozen: school.frozen === true || school.frozen === 'true' || false,
           }));
           setSchools(mappedSchools);
         }
@@ -111,6 +112,11 @@ export function TemplateManagement() {
   }, [selectedSchoolId, templateType]);
 
   const filteredTemplates = templates;
+
+  // Get frozen status of selected school
+  const isSchoolFrozen = selectedSchoolId 
+    ? (schools.find(s => (s._id || s.id) === selectedSchoolId)?.frozen || false)
+    : false;
 
   // Get default fields based on template type
   const getDefaultFields = (type: TemplateType) => {
@@ -737,6 +743,10 @@ export function TemplateManagement() {
   };
 
   const handleCreateNew = () => {
+    if (isSchoolFrozen) {
+      setError('Cannot create templates for a frozen school. Please unfreeze the school first.');
+      return;
+    }
     // Clean up previous image URL if exists
     if (templateData.backgroundImageUrl) {
       URL.revokeObjectURL(templateData.backgroundImageUrl);
@@ -752,6 +762,10 @@ export function TemplateManagement() {
   };
 
   const handleEditTemplate = async (templateId: string) => {
+    if (isSchoolFrozen) {
+      setError('Cannot edit templates for a frozen school. Please unfreeze the school first.');
+      return;
+    }
     try {
       setLoading(true);
       setError(null);
@@ -910,7 +924,15 @@ export function TemplateManagement() {
                           <School className="w-6 h-6 text-blue-600" />
                         </div>
                         <div>
-                          <p className="text-gray-900 font-medium text-lg">{school.name}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="text-gray-900 font-medium text-lg">{school.name}</p>
+                            {school.frozen && (
+                              <Badge variant="outline" className="border-purple-300 text-purple-700 bg-purple-50">
+                                <Snowflake className="w-3 h-3 mr-1 fill-current" />
+                                Frozen
+                              </Badge>
+                            )}
+                          </div>
                           <p className="text-gray-600 text-sm mt-1">
                             {school.city || 'No city specified'}
                           </p>
@@ -935,7 +957,15 @@ export function TemplateManagement() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-gray-900 mb-2 text-2xl font-bold">ID Card Templates</h1>
-          <p className="text-gray-600">{selectedSchool}</p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-gray-600">{selectedSchool}</p>
+            {isSchoolFrozen && (
+              <Badge variant="outline" className="border-purple-300 text-purple-700 bg-purple-50">
+                <Snowflake className="w-3 h-3 mr-1 fill-current" />
+                School is Frozen
+              </Badge>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
@@ -950,7 +980,12 @@ export function TemplateManagement() {
               </SelectContent>
             </Select>
           </div>
-          <Button onClick={handleCreateNew} className="bg-blue-600 hover:bg-blue-700">
+          <Button 
+            onClick={handleCreateNew} 
+            className="bg-blue-600 hover:bg-blue-700"
+            disabled={isSchoolFrozen}
+            title={isSchoolFrozen ? 'Cannot create templates for a frozen school' : ''}
+          >
             <Plus className="w-4 h-4 mr-2" />
             Create New Template
           </Button>
@@ -993,7 +1028,15 @@ export function TemplateManagement() {
             <School className="w-6 h-6 text-blue-600" />
           </div>
           <div>
-            <h2 className="text-gray-900 font-semibold text-lg">{selectedSchool}</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-gray-900 font-semibold text-lg">{selectedSchool}</h2>
+              {isSchoolFrozen && (
+                <Badge variant="outline" className="border-purple-300 text-purple-700 bg-purple-50">
+                  <Snowflake className="w-3 h-3 mr-1 fill-current" />
+                  Frozen
+                </Badge>
+              )}
+            </div>
             <p className="text-gray-600 text-sm">
               {loading ? 'Loading...' : `${filteredTemplates.length} ${filteredTemplates.length === 1 ? 'template' : 'templates'}`}
             </p>
@@ -1255,7 +1298,12 @@ export function TemplateManagement() {
                 <FileText className="w-8 h-8 text-gray-400" />
               </div>
               <p className="text-gray-600 mb-4">No templates found for this school</p>
-              <Button onClick={handleCreateNew} variant="outline">
+              <Button 
+                onClick={handleCreateNew} 
+                variant="outline"
+                disabled={isSchoolFrozen}
+                title={isSchoolFrozen ? 'Cannot create templates for a frozen school' : ''}
+              >
                 <Plus className="w-4 h-4 mr-2" />
                 Create Template for {selectedSchool}
               </Button>
@@ -1319,22 +1367,25 @@ export function TemplateManagement() {
                               size="sm" 
                               title="Preview"
                               onClick={() => handlePreviewTemplate(template._id || template.id || '')}
+                              disabled={isSchoolFrozen}
                             >
                               <Eye className="w-4 h-4" />
                             </Button>
                             <Button
                               variant="ghost"
                               size="sm"
-                              title="Edit"
+                              title={isSchoolFrozen ? 'Cannot edit templates for a frozen school' : 'Edit'}
                               onClick={() => handleEditTemplate(template._id || template.id || '')}
+                              disabled={isSchoolFrozen}
                             >
                               <Edit className="w-4 h-4" />
                             </Button>
                             <Button
                               variant="ghost"
                               size="sm"
-                              title="Delete"
+                              title={isSchoolFrozen ? 'Cannot delete templates from a frozen school' : 'Delete'}
                               className="text-red-600 hover:text-red-700"
+                              disabled={isSchoolFrozen}
                             >
                               <Trash2 className="w-4 h-4" />
                             </Button>
