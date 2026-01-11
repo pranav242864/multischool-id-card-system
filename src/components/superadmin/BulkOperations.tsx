@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Button } from '../ui/button';
-import { Upload, Download, FileSpreadsheet, Image, CheckCircle2, XCircle, Loader2, School, ChevronRight, UserCircle, GraduationCap } from 'lucide-react';
+import { Upload, Download, FileSpreadsheet, Image, CheckCircle2, XCircle, Loader2, School, ChevronRight, UserCircle, GraduationCap, Snowflake } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Label } from '../ui/label';
 import { templateAPI, bulkImportAPI, bulkImageUploadAPI, bulkPDFAPI, schoolAPI, APIError } from '../../utils/api';
+import { Badge } from '../ui/badge';
 import ExcelJS from 'exceljs';
 
 type EntityType = 'teacher' | 'student';
@@ -48,7 +49,12 @@ export function BulkOperations({ userRole }: BulkOperationsProps) {
       try {
         const response = await schoolAPI.getSchools();
         if (response.success && response.data) {
-          setSchools(response.data);
+          // Map schools and include frozen status
+          const mappedSchools = response.data.map((school: any) => ({
+            ...school,
+            frozen: school.frozen === true || school.frozen === 'true' || false,
+          }));
+          setSchools(mappedSchools);
         }
       } catch (err) {
         // Failed to load schools
@@ -190,6 +196,11 @@ export function BulkOperations({ userRole }: BulkOperationsProps) {
       setError('Please select a school first');
       return;
     }
+    const school = schools.find(s => s.name === selectedSchool);
+    if (school?.frozen) {
+      setError('Cannot download templates for a frozen school. Please unfreeze the school first.');
+      return;
+    }
 
     setIsDownloading(true);
     setError(null);
@@ -312,9 +323,12 @@ export function BulkOperations({ userRole }: BulkOperationsProps) {
       setError('Please select a school first');
       return;
     }
-
     // Get school ID from selected school name
     const school = schools.find(s => s.name === selectedSchool);
+    if (school?.frozen) {
+      setError('Cannot import data for a frozen school. Please unfreeze the school first.');
+      return;
+    }
     const schoolId = school?._id || school?.id;
 
     if (!schoolId) {
@@ -373,9 +387,12 @@ export function BulkOperations({ userRole }: BulkOperationsProps) {
       setError('Please select a school first');
       return;
     }
-
     // Get school ID from selected school name
     const school = schools.find(s => s.name === selectedSchool);
+    if (school?.frozen) {
+      setError('Cannot upload photos for a frozen school. Please unfreeze the school first.');
+      return;
+    }
     const schoolId = school?._id || school?.id;
 
     if (!schoolId) {
@@ -425,9 +442,12 @@ export function BulkOperations({ userRole }: BulkOperationsProps) {
       setError('Please select a school first');
       return;
     }
-
     // Get school ID from selected school name
     const school = schools.find(s => s.name === selectedSchool);
+    if (school?.frozen) {
+      setError('Cannot generate PDFs for a frozen school. Please unfreeze the school first.');
+      return;
+    }
     const schoolId = school?._id || school?.id;
 
     if (!schoolId) {
@@ -508,7 +528,15 @@ export function BulkOperations({ userRole }: BulkOperationsProps) {
                           <School className="w-6 h-6 text-blue-600" />
                         </div>
                         <div>
-                          <p className="text-gray-900 font-medium text-lg">{school.name}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="text-gray-900 font-medium text-lg">{school.name}</p>
+                            {school.frozen && (
+                              <Badge variant="outline" className="border-purple-300 text-purple-700 bg-purple-50">
+                                <Snowflake className="w-3 h-3 mr-1 fill-current" />
+                                Frozen
+                              </Badge>
+                            )}
+                          </div>
                           <p className="text-gray-600 text-sm mt-1">{school.city || 'Bulk import operations'}</p>
                         </div>
                       </div>
@@ -531,7 +559,19 @@ export function BulkOperations({ userRole }: BulkOperationsProps) {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-gray-900 mb-2 text-2xl font-bold">Bulk Operations</h1>
-          <p className="text-gray-600">{selectedSchool}</p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-gray-600">{selectedSchool}</p>
+            {(() => {
+              const school = schools.find(s => s.name === selectedSchool);
+              const isFrozen = school?.frozen || false;
+              return isFrozen && (
+                <Badge variant="outline" className="border-purple-300 text-purple-700 bg-purple-50">
+                  <Snowflake className="w-3 h-3 mr-1 fill-current" />
+                  School is Frozen
+                </Badge>
+              );
+            })()}
+          </div>
         </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
@@ -572,7 +612,19 @@ export function BulkOperations({ userRole }: BulkOperationsProps) {
             <School className="w-6 h-6 text-blue-600" />
           </div>
           <div>
-            <h2 className="text-gray-900 font-semibold text-lg">{selectedSchool}</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-gray-900 font-semibold text-lg">{selectedSchool}</h2>
+              {(() => {
+                const school = schools.find(s => s.name === selectedSchool);
+                const isFrozen = school?.frozen || false;
+                return isFrozen && (
+                  <Badge variant="outline" className="border-purple-300 text-purple-700 bg-purple-50">
+                    <Snowflake className="w-3 h-3 mr-1 fill-current" />
+                    Frozen
+                  </Badge>
+                );
+              })()}
+            </div>
             <p className="text-gray-600 text-sm">
               {entityConfig.description}
             </p>
@@ -626,8 +678,15 @@ export function BulkOperations({ userRole }: BulkOperationsProps) {
 
                 <Button 
                   className="w-full" 
-                  disabled={!xlsxFile || isImporting}
+                  disabled={!xlsxFile || isImporting || (() => {
+                    const school = schools.find(s => s.name === selectedSchool);
+                    return school?.frozen || false;
+                  })()}
                   onClick={handleImportData}
+                  title={(() => {
+                    const school = schools.find(s => s.name === selectedSchool);
+                    return school?.frozen ? 'Cannot import data for a frozen school' : '';
+                  })()}
                 >
                   {isImporting ? (
                     <>
@@ -679,7 +738,14 @@ export function BulkOperations({ userRole }: BulkOperationsProps) {
                   variant="outline" 
                   className="w-full" 
                   onClick={handleDownloadTemplate}
-                  disabled={isDownloading || isLoadingTemplates}
+                  disabled={isDownloading || isLoadingTemplates || (() => {
+                    const school = schools.find(s => s.name === selectedSchool);
+                    return school?.frozen || false;
+                  })()}
+                  title={(() => {
+                    const school = schools.find(s => s.name === selectedSchool);
+                    return school?.frozen ? 'Cannot download templates for a frozen school' : '';
+                  })()}
                 >
                   {isDownloading ? (
                     <>
@@ -851,8 +917,15 @@ export function BulkOperations({ userRole }: BulkOperationsProps) {
 
                 <Button 
                   className="w-full" 
-                  disabled={!photoFiles || isUploadingPhotos}
+                  disabled={!photoFiles || isUploadingPhotos || (() => {
+                    const school = schools.find(s => s.name === selectedSchool);
+                    return school?.frozen || false;
+                  })()}
                   onClick={handleUploadPhotos}
+                  title={(() => {
+                    const school = schools.find(s => s.name === selectedSchool);
+                    return school?.frozen ? 'Cannot upload photos for a frozen school' : '';
+                  })()}
                 >
                   {isUploadingPhotos ? (
                     <>
@@ -898,8 +971,15 @@ export function BulkOperations({ userRole }: BulkOperationsProps) {
               
               <Button 
                 className="w-full" 
-                disabled={!selectedSchool || isGeneratingPDF}
+                disabled={!selectedSchool || isGeneratingPDF || (() => {
+                  const school = schools.find(s => s.name === selectedSchool);
+                  return school?.frozen || false;
+                })()}
                 onClick={handleGenerateBulkPDF}
+                title={(() => {
+                  const school = schools.find(s => s.name === selectedSchool);
+                  return school?.frozen ? 'Cannot generate PDFs for a frozen school' : '';
+                })()}
               >
                 {isGeneratingPDF ? (
                   <>
