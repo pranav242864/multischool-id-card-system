@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { DataTable, Column } from '../ui/DataTable';
 import { Button } from '../ui/button';
-import { Plus, Edit, Trash2, Eye, CreditCard, School, GraduationCap, ChevronRight, Loader2, RefreshCw, Download, ArrowUp } from 'lucide-react';
+import { Plus, Edit, Trash2, Eye, CreditCard, School, GraduationCap, ChevronRight, Loader2, RefreshCw, Download, ArrowUp, Snowflake } from 'lucide-react';
 import { AddStudentModal } from '../modals/AddStudentModal';
 import { schoolAPI, studentAPI, classAPI, pdfAPI, previewAPI, bulkImportAPI, downloadBlob, APIError } from '../../utils/api';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
+import { Badge } from '../ui/badge';
 
 interface Student {
   _id?: string;
@@ -67,6 +68,11 @@ export function ManageStudents() {
 
     fetchSchools();
   }, []);
+
+  // Get frozen status of selected school
+  const isSchoolFrozen = selectedSchoolId 
+    ? (schools.find(s => s._id === selectedSchoolId || s.id === selectedSchoolId)?.frozen || false)
+    : false;
 
   const fetchData = async () => {
     if (!selectedSchoolId) return;
@@ -685,7 +691,15 @@ export function ManageStudents() {
                           <School className="w-6 h-6 text-blue-600" />
                         </div>
                         <div>
-                          <p className="text-gray-900 font-medium text-lg">{school.name}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="text-gray-900 font-medium text-lg">{school.name}</p>
+                            {school.frozen && (
+                              <Badge variant="outline" className="border-purple-300 text-purple-700 bg-purple-50">
+                                <Snowflake className="w-3 h-3 mr-1 fill-current" />
+                                Frozen
+                              </Badge>
+                            )}
+                          </div>
                           <p className="text-gray-600 text-sm mt-1">
                             {school.city || 'No city specified'}
                           </p>
@@ -712,7 +726,15 @@ export function ManageStudents() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-gray-900 mb-2 text-2xl font-bold">Manage Students</h1>
-            <p className="text-gray-600">Select a class to view its students</p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="text-gray-600">Select a class to view its students</p>
+              {isSchoolFrozen && (
+                <Badge variant="outline" className="border-purple-300 text-purple-700 bg-purple-50">
+                  <Snowflake className="w-3 h-3 mr-1 fill-current" />
+                  School is Frozen
+                </Badge>
+              )}
+            </div>
           </div>
           {selectedSchoolId && (
             <div className="flex items-center gap-2">
@@ -768,7 +790,15 @@ export function ManageStudents() {
               <School className="w-6 h-6 text-blue-600" />
             </div>
             <div>
-              <h2 className="text-gray-900 font-semibold text-lg">{selectedSchool}</h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-gray-900 font-semibold text-lg">{selectedSchool}</h2>
+                {isSchoolFrozen && (
+                  <Badge variant="outline" className="border-purple-300 text-purple-700 bg-purple-50">
+                    <Snowflake className="w-3 h-3 mr-1 fill-current" />
+                    Frozen
+                  </Badge>
+                )}
+              </div>
               <p className="text-gray-600 text-sm">
                 {loading ? 'Loading...' : `${getStudentCountForSchool()} ${getStudentCountForSchool() === 1 ? 'student' : 'students'} across ${classList.length} ${classList.length === 1 ? 'class' : 'classes'}`}
               </p>
@@ -837,9 +867,17 @@ export function ManageStudents() {
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-gray-900 mb-2 text-2xl font-bold">Manage Students</h1>
-            <p className="text-gray-600">
-              {selectedSchool} - {selectedClass}
-            </p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="text-gray-600">
+                {selectedSchool} - {selectedClass}
+              </p>
+              {isSchoolFrozen && (
+                <Badge variant="outline" className="border-purple-300 text-purple-700 bg-purple-50">
+                  <Snowflake className="w-3 h-3 mr-1 fill-current" />
+                  School is Frozen
+                </Badge>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <Button

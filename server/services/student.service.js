@@ -4,10 +4,14 @@ const Session = require('../models/Session');
 const School = require('../models/School');
 const { getActiveSession } = require('../utils/sessionUtils');
 const { checkClassNotFrozen, validateClassNotFrozen } = require('./class.service');
+const { checkSchoolNotFrozen } = require('../utils/schoolUtils');
 const mongoose = require('mongoose');
 
 // Create a new student
 const createStudent = async (studentData) => {
+  // Check if school is frozen
+  await checkSchoolNotFrozen(studentData.schoolId, 'create');
+  
   // Get the active session for the school (throws error if none exists)
   const activeSession = await getActiveSession(studentData.schoolId);
   
@@ -145,6 +149,8 @@ const getStudents = async (schoolId, classId = null, page = 1, limit = 10) => {
 // For Teacher role: Validates teacher is assigned to the student's class
 // SECURITY: Enforces strict school scoping - schoolId must match
 const updateStudent = async (studentId, updateData, schoolId, userRole = null) => {
+  // Check if school is frozen
+  await checkSchoolNotFrozen(schoolId, 'update');
   // SECURITY: Remove schoolId from updateData if present - it cannot be changed
   if (updateData.schoolId !== undefined) {
     delete updateData.schoolId;
@@ -272,6 +278,9 @@ const updateStudent = async (studentId, updateData, schoolId, userRole = null) =
 // Prevents deletion of students from inactive or archived sessions
 // SECURITY: Enforces strict school scoping - schoolId must match
 const deleteStudent = async (studentId, schoolId) => {
+  // Check if school is frozen
+  await checkSchoolNotFrozen(schoolId, 'delete');
+  
   // Get the active session for the school (throws error if none exists or archived)
   const activeSession = await getActiveSession(schoolId);
   

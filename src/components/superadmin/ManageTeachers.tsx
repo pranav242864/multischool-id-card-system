@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { DataTable, Column } from '../ui/DataTable';
 import { Button } from '../ui/button';
-import { Plus, Edit, Trash2, UserCircle, School, ChevronRight, Download, Loader2 } from 'lucide-react';
+import { Plus, Edit, Trash2, UserCircle, School, ChevronRight, Download, Loader2, Snowflake } from 'lucide-react';
 import { Badge } from '../ui/badge';
 import { schoolAPI, teacherAPI, bulkImportAPI, downloadBlob, APIError } from '../../utils/api';
 import { AddTeacherAdminModal } from '../modals/AddTeacherAdminModal';
@@ -51,6 +51,11 @@ export function ManageTeachers() {
     fetchSchools();
   }, []);
 
+  // Get frozen status of selected school
+  const isSchoolFrozen = selectedSchoolId 
+    ? (schools.find(s => s._id === selectedSchoolId || s.id === selectedSchoolId)?.frozen || false)
+    : false;
+
   const fetchTeachers = async () => {
     if (!selectedSchoolId) return;
     
@@ -98,10 +103,18 @@ export function ManageTeachers() {
   const filteredTeachers = teachers;
 
   const handleEdit = (teacher: Teacher) => {
+    if (isSchoolFrozen) {
+      setError('Cannot edit teachers in a frozen school. Please unfreeze the school first.');
+      return;
+    }
     setIsModalOpen(true);
   };
 
   const handleDelete = (teacherId: string) => {
+    if (isSchoolFrozen) {
+      setError('Cannot delete teachers from a frozen school. Please unfreeze the school first.');
+      return;
+    }
     // Delete functionality to be implemented
   };
 
@@ -188,6 +201,8 @@ export function ManageTeachers() {
               size="sm"
               onClick={() => handleEdit(teacher)}
               className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+              disabled={isSchoolFrozen}
+              title={isSchoolFrozen ? 'Cannot edit teachers in a frozen school' : ''}
             >
               <Edit className="w-4 h-4" />
             </Button>
@@ -196,6 +211,8 @@ export function ManageTeachers() {
               size="sm"
               onClick={() => handleDelete(teacherId)}
               className="text-red-600 hover:text-red-700 hover:bg-red-50"
+              disabled={isSchoolFrozen}
+              title={isSchoolFrozen ? 'Cannot delete teachers from a frozen school' : ''}
             >
               <Trash2 className="w-4 h-4" />
             </Button>
@@ -233,17 +250,32 @@ export function ManageTeachers() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-gray-900 mb-2 text-2xl font-bold">Manage Teachers</h1>
-          <p className="text-gray-600">
-            {selectedSchool
-              ? `Viewing teachers for ${selectedSchool}`
-              : 'Select a school to view its teachers'}
-          </p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-gray-600">
+              {selectedSchool
+                ? `Viewing teachers for ${selectedSchool}`
+                : 'Select a school to view its teachers'}
+            </p>
+            {selectedSchool && isSchoolFrozen && (
+              <Badge variant="outline" className="border-purple-300 text-purple-700 bg-purple-50">
+                <Snowflake className="w-3 h-3 mr-1 fill-current" />
+                School is Frozen
+              </Badge>
+            )}
+          </div>
         </div>
         {selectedSchool && (
           <Button 
-            onClick={() => setIsModalOpen(true)} 
+            onClick={() => {
+              if (isSchoolFrozen) {
+                setError('Cannot add teachers to a frozen school. Please unfreeze the school first.');
+                return;
+              }
+              setIsModalOpen(true);
+            }} 
             className="bg-blue-600 hover:bg-blue-700"
-            disabled={loading}
+            disabled={loading || isSchoolFrozen}
+            title={isSchoolFrozen ? 'Cannot add teachers to a frozen school' : ''}
           >
             <Plus className="w-4 h-4 mr-2" />
             Add New Teacher
@@ -285,7 +317,15 @@ export function ManageTeachers() {
                           <School className="w-6 h-6 text-blue-600" />
                         </div>
                         <div>
-                          <p className="text-gray-900 font-medium text-lg">{school.name}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="text-gray-900 font-medium text-lg">{school.name}</p>
+                            {school.frozen && (
+                              <Badge variant="outline" className="border-purple-300 text-purple-700 bg-purple-50">
+                                <Snowflake className="w-3 h-3 mr-1 fill-current" />
+                                Frozen
+                              </Badge>
+                            )}
+                          </div>
                           <p className="text-gray-600 text-sm mt-1">
                             {school.city || 'No city specified'}
                           </p>

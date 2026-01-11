@@ -4,6 +4,7 @@ const Session = require('../models/Session');
 const School = require('../models/School');
 const { getActiveSession } = require('../utils/sessionUtils');
 const { validateSessionActive } = require('./session.service');
+const { checkSchoolNotFrozen } = require('../utils/schoolUtils');
 const mongoose = require('mongoose');
 
 // Helper function to validate teacher ownership
@@ -24,6 +25,9 @@ const validateTeacherOwnership = (teacher, userEmail) => {
 // If classId is provided, it must belong to the active session
 // Uses atomic operations to ensure only one teacher per class
 const createTeacher = async (teacherData) => {
+  // Check if school is frozen
+  await checkSchoolNotFrozen(teacherData.schoolId, 'create');
+  
   // Get the active session for the school (throws error if none exists)
   const activeSession = await getActiveSession(teacherData.schoolId);
   
@@ -175,6 +179,9 @@ const getTeachers = async (schoolId, classId = null, page = 1, limit = 10, userR
 // Enforces strict ownership validation for teachers
 // SECURITY: Enforces strict school scoping - schoolId must match
 const updateTeacher = async (teacherId, updateData, schoolId, userRole = null, userEmail = null) => {
+  // Check if school is frozen
+  await checkSchoolNotFrozen(schoolId, 'update');
+  
   // SECURITY: Remove schoolId from updateData if present - it cannot be changed
   if (updateData.schoolId !== undefined) {
     delete updateData.schoolId;
@@ -472,6 +479,9 @@ const updateTeacher = async (teacherId, updateData, schoolId, userRole = null, u
 // Delete a teacher (soft delete by setting status to DISABLED)
 // SECURITY: Enforces strict school scoping - schoolId must match
 const deleteTeacher = async (teacherId, schoolId) => {
+  // Check if school is frozen
+  await checkSchoolNotFrozen(schoolId, 'delete');
+  
   // Verify teacher exists - MUST filter by schoolId for security
   // Only check active teachers (exclude deleted/inactive)
   const teacher = await Teacher.findOne({

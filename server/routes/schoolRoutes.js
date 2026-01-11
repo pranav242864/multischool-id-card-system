@@ -7,6 +7,8 @@ const {
   getAllSchools,
   getSchool,
   updateSchool,
+  freezeSchool,
+  unfreezeSchool,
   deleteSchool
 } = require('../controllers/school.controller');
 
@@ -27,6 +29,12 @@ router.get('/schools/:id', requireRole('SUPERADMIN'), getSchool);
 
 // PUT /api/v1/schools/:id - Update a school (Superadmin only)
 router.put('/schools/:id', requireRole('SUPERADMIN'), updateSchool);
+
+// PATCH /api/v1/schools/:id/freeze - Freeze a school (Superadmin only)
+router.patch('/schools/:id/freeze', requireRole('SUPERADMIN'), freezeSchool);
+
+// PATCH /api/v1/schools/:id/unfreeze - Unfreeze a school (Superadmin only)
+router.patch('/schools/:id/unfreeze', requireRole('SUPERADMIN'), unfreezeSchool);
 
 // DELETE /api/v1/schools/:id - Soft delete a school and its related data (Superadmin only)
 router.delete('/schools/:id', requireRole('SUPERADMIN'), deleteSchool);

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { School, Users, GraduationCap, Bell, FileText, ExternalLink } from 'lucide-react';
+import { School, Users, GraduationCap, Bell, FileText, ExternalLink, Snowflake } from 'lucide-react';
 import { StatCard } from '../ui/StatCard';
 import { Button } from '../ui/button';
+import { Badge } from '../ui/badge';
 import { schoolAPI, noticeAPI, adminAPI, teacherAPI, studentAPI, APIError } from '../../utils/api';
 
 interface SuperadminDashboardProps {
@@ -258,33 +259,62 @@ export function SuperadminDashboard({ onNavigate }: SuperadminDashboardProps) {
 
         {/* Recent Schools */}
         <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h2 className="text-gray-900 mb-4">Recently Added Schools</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-gray-900">Recently Added Schools</h2>
+            <School className="w-5 h-5 text-gray-400" />
+          </div>
           <div className="space-y-4">
             {schools.length === 0 ? (
               <p className="text-gray-500 text-sm">No schools available</p>
             ) : (
-              schools.slice(0, 3).map((school) => (
-                <div
-                  key={school._id || school.id}
-                  className="flex items-center justify-between p-4 rounded-lg border border-gray-200"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                      <School className="w-5 h-5 text-blue-600" />
+              // Sort by creation date (most recent first) and take top 3
+              [...schools]
+                .sort((a, b) => {
+                  const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                  const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                  return dateB - dateA; // Most recent first
+                })
+                .slice(0, 3)
+                .map((school) => {
+                  const isFrozen = school.frozen || false;
+                  const status = (school.status || 'active').toLowerCase();
+                  
+                  return (
+                    <div
+                      key={school._id || school.id}
+                      className="flex items-center justify-between p-4 rounded-lg border border-gray-200 hover:shadow-sm transition-shadow"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                          <School className="w-5 h-5 text-blue-600" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="text-gray-900 font-medium">{school.name}</p>
+                            {isFrozen ? (
+                              <Badge variant="outline" className="border-purple-300 text-purple-700 bg-purple-50">
+                                <Snowflake className="w-3 h-3 mr-1 fill-current" />
+                                Frozen
+                              </Badge>
+                            ) : (
+                              <Badge variant={status === 'active' ? 'default' : 'secondary'}>
+                                {status.charAt(0).toUpperCase() + status.slice(1)}
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-gray-600 text-sm mt-1">
+                            {school.city || 'No city specified'}
+                          </p>
+                          {school.createdAt && (
+                            <p className="text-gray-500 text-xs mt-1">
+                              Added {new Date(school.createdAt).toLocaleDateString()}
+                            </p>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-gray-900">{school.name}</p>
-                      <p className="text-gray-600 text-sm">
-                        {school.city || 'No city specified'}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-gray-900">{school.studentCount || 0}</p>
-                    <p className="text-gray-600 text-sm">students</p>
-                  </div>
-                </div>
-              ))
+                  );
+                })
             )}
           </div>
         </div>

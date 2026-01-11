@@ -1,4 +1,4 @@
-const { createSchool, deleteSchool, getSchools, getSchoolById, updateSchool } = require('../services/school.service');
+const { createSchool, deleteSchool, getSchools, getSchoolById, updateSchool, freezeSchool, unfreezeSchool } = require('../services/school.service');
 const asyncHandler = require('../utils/asyncHandler');
 const mongoose = require('mongoose');
 const { isSuperadmin } = require('../utils/roleGuards');
@@ -179,6 +179,108 @@ const updateSchoolController = asyncHandler(async (req, res, next) => {
 });
 
 /**
+ * Freeze a school
+ * @route PATCH /api/v1/schools/:id/freeze
+ * @access Private - Superadmin only
+ */
+const freezeSchoolController = asyncHandler(async (req, res, next) => {
+  // Role check is enforced by requireRole middleware in routes
+  if (!isSuperadmin(req.user)) {
+    return res.status(403).json({
+      success: false,
+      message: 'Access denied: Only Superadmin can freeze schools'
+    });
+  }
+
+  const { id: schoolId } = req.params;
+
+  // Validate ObjectId format
+  if (!mongoose.Types.ObjectId.isValid(schoolId)) {
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid school ID format'
+    });
+  }
+
+  try {
+    const frozenSchool = await freezeSchool(schoolId);
+
+    res.status(200).json({
+      success: true,
+      message: 'School frozen successfully',
+      data: frozenSchool
+    });
+  } catch (error) {
+    if (error.message.includes('School not found') || error.message.includes('Invalid school ID format')) {
+      return res.status(404).json({
+        success: false,
+        message: error.message
+      });
+    }
+    
+    if (error.message.includes('inactive school') || error.message.includes('already frozen')) {
+      return res.status(400).json({
+        success: false,
+        message: error.message
+      });
+    }
+
+    next(error);
+  }
+});
+
+/**
+ * Unfreeze a school
+ * @route PATCH /api/v1/schools/:id/unfreeze
+ * @access Private - Superadmin only
+ */
+const unfreezeSchoolController = asyncHandler(async (req, res, next) => {
+  // Role check is enforced by requireRole middleware in routes
+  if (!isSuperadmin(req.user)) {
+    return res.status(403).json({
+      success: false,
+      message: 'Access denied: Only Superadmin can unfreeze schools'
+    });
+  }
+
+  const { id: schoolId } = req.params;
+
+  // Validate ObjectId format
+  if (!mongoose.Types.ObjectId.isValid(schoolId)) {
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid school ID format'
+    });
+  }
+
+  try {
+    const unfrozenSchool = await unfreezeSchool(schoolId);
+
+    res.status(200).json({
+      success: true,
+      message: 'School unfrozen successfully',
+      data: unfrozenSchool
+    });
+  } catch (error) {
+    if (error.message.includes('School not found') || error.message.includes('Invalid school ID format')) {
+      return res.status(404).json({
+        success: false,
+        message: error.message
+      });
+    }
+    
+    if (error.message.includes('inactive school') || error.message.includes('not frozen')) {
+      return res.status(400).json({
+        success: false,
+        message: error.message
+      });
+    }
+
+    next(error);
+  }
+});
+
+/**
  * Delete a school (soft delete - sets status=inactive)
  * Soft deletes school and all related entities:
  * - Students
@@ -228,7 +330,7 @@ const deleteSchoolController = asyncHandler(async (req, res, next) => {
       });
     }
     
-    if (error.message.includes('already deleted')) {
+    if (error.message.includes('already deleted') || error.message.includes('frozen school')) {
       return res.status(400).json({
         success: false,
         message: error.message
@@ -244,6 +346,8 @@ module.exports = {
   getAllSchools,
   getSchool,
   updateSchool: updateSchoolController,
+  freezeSchool: freezeSchoolController,
+  unfreezeSchool: unfreezeSchoolController,
   deleteSchool: deleteSchoolController
 };
 

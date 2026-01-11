@@ -266,6 +266,26 @@ router.post('/login', async (req, res) => {
           message: 'Access denied: Your school account has been deactivated. Please contact the administrator.'
         });
       }
+
+      // SECURITY: Check if school is frozen
+      if (user.schoolId.frozen) {
+        failureReason = 'school_frozen';
+        await logLoginAttempt({
+          email: user.email,
+          username: user.username,
+          role: user.role,
+          schoolId: user.schoolId._id,
+          ipAddress,
+          success: false,
+          loginMethod: 'email_password',
+          failureReason
+        });
+
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied: Your school account has been frozen. Please contact the administrator.'
+        });
+      }
       
       let allowedLogin = await AllowedLogin.findOne({ schoolId: user.schoolId._id });
       if (!allowedLogin) {

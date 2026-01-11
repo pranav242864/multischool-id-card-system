@@ -62,6 +62,11 @@ export function ManageClasses() {
     fetchSchools();
   }, []);
 
+  // Get frozen status of selected school
+  const isSchoolFrozen = selectedSchoolId 
+    ? (schools.find(s => s._id === selectedSchoolId || s.id === selectedSchoolId)?.frozen || false)
+    : false;
+
   // Fetch classes when school is selected
   const fetchClasses = async (showLoading = true) => {
     if (!selectedSchoolId) {
@@ -298,7 +303,19 @@ export function ManageClasses() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-gray-900 mb-2 text-2xl font-bold">Manage Classes</h1>
-          <p className="text-gray-600">Create and manage classes for schools</p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-gray-600">
+              {selectedSchoolName
+                ? `Viewing classes for ${selectedSchoolName}`
+                : 'Select a school to view its classes'}
+            </p>
+            {selectedSchoolName && isSchoolFrozen && (
+              <Badge variant="outline" className="border-purple-300 text-purple-700 bg-purple-50">
+                <Snowflake className="w-3 h-3 mr-1 fill-current" />
+                School is Frozen
+              </Badge>
+            )}
+          </div>
         </div>
 
         <div className="flex gap-2 items-center">
@@ -329,7 +346,15 @@ export function ManageClasses() {
             <SelectContent>
               {schools.map((school) => (
                 <SelectItem key={school._id || school.id} value={school._id || school.id}>
-                  {school.name}
+                  <div className="flex items-center gap-2">
+                    <span>{school.name}</span>
+                    {school.frozen && (
+                      <Badge variant="outline" className="border-purple-300 text-purple-700 bg-purple-50 ml-2">
+                        <Snowflake className="w-3 h-3 mr-1 fill-current" />
+                        Frozen
+                      </Badge>
+                    )}
+                  </div>
                 </SelectItem>
               ))}
             </SelectContent>

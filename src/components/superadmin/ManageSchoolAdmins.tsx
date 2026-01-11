@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Button } from '../ui/button';
-import { Plus, Edit, Trash2, Mail, Lock, School } from 'lucide-react';
+import { Plus, Edit, Trash2, Mail, Lock, School, Snowflake } from 'lucide-react';
 import { AddAdminModal } from '../modals/AddAdminModal';
 import { ChangePasswordModal } from '../modals/ChangePasswordModal';
 import { Badge } from '../ui/badge';
@@ -54,6 +54,11 @@ export function ManageSchoolAdmins() {
 
     fetchSchools();
   }, []);
+
+  // Get frozen status of selected school
+  const isSchoolFrozen = selectedSchoolId 
+    ? (schools.find(s => s._id === selectedSchoolId || s.id === selectedSchoolId)?.frozen || false)
+    : false;
 
   // Fetch admins when school is selected
   useEffect(() => {
@@ -372,7 +377,19 @@ export function ManageSchoolAdmins() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-gray-900 mb-2 text-2xl font-bold">Manage School Admins</h1>
-          <p className="text-gray-600">Select a school to view and manage its administrators</p>
+          <p className="text-gray-600">
+            {selectedSchool
+              ? `Managing admins for ${selectedSchool}${isSchoolFrozen ? ' (Frozen)' : ''}`
+              : 'Select a school to view and manage its administrators'}
+          </p>
+          {selectedSchool && isSchoolFrozen && (
+            <div className="mt-2 flex items-center gap-2">
+              <Badge variant="outline" className="border-purple-300 text-purple-700 bg-purple-50">
+                <Snowflake className="w-3 h-3 mr-1 fill-current" />
+                School is Frozen
+              </Badge>
+            </div>
+          )}
         </div>
         <Button onClick={() => setIsModalOpen(true)} className="bg-blue-600 hover:bg-blue-700">
           <Plus className="w-4 h-4 mr-2" />
@@ -420,7 +437,15 @@ export function ManageSchoolAdmins() {
                 const schoolId = school._id || school.id || '';
                 return (
                   <SelectItem key={schoolId} value={school.name}>
-                    {school.name}
+                    <div className="flex items-center gap-2">
+                      <span>{school.name}</span>
+                      {school.frozen && (
+                        <Badge variant="outline" className="border-purple-300 text-purple-700 bg-purple-50 ml-2">
+                          <Snowflake className="w-3 h-3 mr-1 fill-current" />
+                          Frozen
+                        </Badge>
+                      )}
+                    </div>
                   </SelectItem>
                 );
               })
@@ -438,7 +463,15 @@ export function ManageSchoolAdmins() {
                 <School className="w-5 h-5 text-blue-600" />
               </div>
               <div>
-                <h2 className="text-gray-900 font-semibold text-lg">{selectedSchool}</h2>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-gray-900 font-semibold text-lg">{selectedSchool}</h2>
+                  {isSchoolFrozen && (
+                    <Badge variant="outline" className="border-purple-300 text-purple-700 bg-purple-50">
+                      <Snowflake className="w-3 h-3 mr-1 fill-current" />
+                      Frozen
+                    </Badge>
+                  )}
+                </div>
                 <p className="text-gray-600 text-sm">
                   {filteredAdmins.length} {filteredAdmins.length === 1 ? 'admin' : 'admins'}
                 </p>

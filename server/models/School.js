@@ -28,6 +28,10 @@ const schoolSchema = new mongoose.Schema({
       message: 'Status must be either active, inactive, or suspended'
     },
     default: 'active'
+  },
+  frozen: {
+    type: Boolean,
+    default: false
   }
 }, {
   timestamps: true

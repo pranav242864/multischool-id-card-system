@@ -833,6 +833,24 @@ export const schoolAPI = {
     );
   },
 
+  // Freeze school
+  freezeSchool: async (schoolId: string) => {
+    return apiRequest<{ success: boolean; data: any; message: string }>(
+      `/schools/${schoolId}/freeze`,
+      { method: 'PATCH' },
+      { schoolId }
+    );
+  },
+
+  // Unfreeze school
+  unfreezeSchool: async (schoolId: string) => {
+    return apiRequest<{ success: boolean; data: any; message: string }>(
+      `/schools/${schoolId}/unfreeze`,
+      { method: 'PATCH' },
+      { schoolId }
+    );
+  },
+
   // Delete school
   deleteSchool: async (schoolId: string) => {
     // For DELETE, schoolId is in URL params, but schoolScoping may require query param

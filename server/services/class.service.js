@@ -3,6 +3,7 @@ const Session = require('../models/Session');
 const School = require('../models/School');
 const { getActiveSession } = require('../utils/sessionUtils');
 const { validateSessionActive } = require('./session.service');
+const { checkSchoolNotFrozen } = require('../utils/schoolUtils');
 const mongoose = require('mongoose');
 
 // Centralized helper function to check if a class is frozen
@@ -46,6 +47,9 @@ const validateClassNotFrozen = async (classId, schoolId, operation = 'modify') =
 // Create a new class
 // Automatically uses the active session
 const createClass = async (classData) => {
+  // Check if school is frozen
+  await checkSchoolNotFrozen(classData.schoolId, 'create');
+  
   // Get the active session for the school (throws error if none exists)
   const activeSession = await getActiveSession(classData.schoolId);
 
@@ -135,6 +139,9 @@ const getClasses = async (schoolId, sessionId = null, page = 1, limit = 10) => {
 // Prevents freezing classes from inactive sessions
 // SECURITY: Enforces strict school scoping - schoolId must match
 const freezeClass = async (classId, schoolId) => {
+  // Check if school is frozen
+  await checkSchoolNotFrozen(schoolId, 'modify');
+  
   // Get the active session for the school (throws error if none exists)
   const activeSession = await getActiveSession(schoolId);
   
@@ -171,6 +178,9 @@ const freezeClass = async (classId, schoolId) => {
 // Prevents unfreezing classes from inactive or archived sessions
 // SECURITY: Enforces strict school scoping - schoolId must match
 const unfreezeClass = async (classId, schoolId) => {
+  // Check if school is frozen
+  await checkSchoolNotFrozen(schoolId, 'modify');
+  
   // Get the active session for the school (throws error if none exists or archived)
   const activeSession = await getActiveSession(schoolId);
   

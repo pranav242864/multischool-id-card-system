@@ -146,8 +146,18 @@ const authMiddleware = asyncHandler(async (req, res, next) => {
           message: 'Access denied: Your school account has been deactivated. Please contact the administrator.'
         });
       }
+
+      // SECURITY: Check if school is frozen
+      if (user.schoolId.frozen) {
+        console.log('[AUTH] ❌ FAIL: School is frozen');
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied: Your school account has been frozen. Please contact the administrator.'
+        });
+      }
       
       console.log('[AUTH] ✅ School status check passed:', user.schoolId.status);
+      console.log('[AUTH] ✅ School frozen check passed:', !user.schoolId.frozen);
     }
 
     // STEP 8: Set req.user

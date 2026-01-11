@@ -80,6 +80,11 @@ async function updateSchool(schoolId, updateData) {
     throw new Error('Cannot update inactive school');
   }
 
+  // Check if school is frozen
+  if (school.frozen) {
+    throw new Error('Cannot update a frozen school. Please unfreeze the school first.');
+  }
+
   // Update fields
   if (updateData.name !== undefined) {
     school.name = updateData.name.trim();
@@ -92,6 +97,70 @@ async function updateSchool(schoolId, updateData) {
   }
 
   await school.save();
+  return school;
+}
+
+/**
+ * Freeze a school
+ * Prevents modifications to the school and its related data
+ * @param {String} schoolId - School ID
+ * @returns {Promise<Object>} - Updated school
+ */
+async function freezeSchool(schoolId) {
+  // Validate ObjectId format
+  if (!mongoose.Types.ObjectId.isValid(schoolId)) {
+    throw new Error('Invalid school ID format');
+  }
+
+  const school = await School.findById(schoolId);
+
+  if (!school) {
+    throw new Error('School not found');
+  }
+
+  if (school.status !== 'active') {
+    throw new Error('Cannot freeze inactive school');
+  }
+
+  if (school.frozen) {
+    throw new Error('School is already frozen');
+  }
+
+  school.frozen = true;
+  await school.save();
+
+  return school;
+}
+
+/**
+ * Unfreeze a school
+ * Allows modifications to the school and its related data
+ * @param {String} schoolId - School ID
+ * @returns {Promise<Object>} - Updated school
+ */
+async function unfreezeSchool(schoolId) {
+  // Validate ObjectId format
+  if (!mongoose.Types.ObjectId.isValid(schoolId)) {
+    throw new Error('Invalid school ID format');
+  }
+
+  const school = await School.findById(schoolId);
+
+  if (!school) {
+    throw new Error('School not found');
+  }
+
+  if (school.status !== 'active') {
+    throw new Error('Cannot unfreeze inactive school');
+  }
+
+  if (!school.frozen) {
+    throw new Error('School is not frozen');
+  }
+
+  school.frozen = false;
+  await school.save();
+
   return school;
 }
 
@@ -118,6 +187,11 @@ async function deleteSchool(schoolId) {
     throw new Error('School already deleted');
   }
 
+  // Check if school is frozen
+  if (school.frozen) {
+    throw new Error('Cannot delete a frozen school. Please unfreeze the school first.');
+  }
+
   // Soft delete - set status to inactive
   school.status = 'inactive';
   await school.save();
@@ -136,5 +210,7 @@ module.exports = {
   getSchools,
   getSchoolById,
   updateSchool,
+  freezeSchool,
+  unfreezeSchool,
   deleteSchool
 };

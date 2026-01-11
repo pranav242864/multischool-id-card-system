@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { DataTable, Column } from '../ui/DataTable';
 import { Button } from '../ui/button';
-import { Plus, Edit, Trash2, MapPin, ChevronDown, School } from 'lucide-react';
+import { Plus, Edit, Trash2, MapPin, ChevronDown, School, Snowflake } from 'lucide-react';
 import { AddSchoolModal } from '../modals/AddSchoolModal';
 import { Badge } from '../ui/badge';
 import { schoolAPI, sessionAPI, APIError } from '../../utils/api';
@@ -18,6 +18,7 @@ interface School {
   contactEmail?: string;
   studentCount?: number;
   status?: 'active' | 'inactive' | 'ACTIVE' | 'INACTIVE';
+  frozen?: boolean;
 }
 
 export function ManageSchools() {
@@ -33,6 +34,7 @@ export function ManageSchools() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectionMode, setSelectionMode] = useState(false);
   const [deletingSchoolId, setDeletingSchoolId] = useState<string | null>(null);
+  const [freezingSchoolId, setFreezingSchoolId] = useState<string | null>(null);
 
   const fetchSchools = async () => {
     setLoading(true);
@@ -52,6 +54,7 @@ export function ManageSchools() {
           adminEmail: school.adminEmail || school.contactEmail || '',
           studentCount: school.studentCount || 0,
           status: (school.status || 'active').toLowerCase() as 'active' | 'inactive',
+          frozen: school.frozen || false,
         }));
         setSchools(mappedSchools);
       }
@@ -81,6 +84,33 @@ export function ManageSchools() {
   const handleEdit = (school: School) => {
     setEditingSchool(school);
     setIsModalOpen(true);
+  };
+
+  const handleFreeze = async (schoolId: string) => {
+    const school = schools.find(s => (s._id || s.id) === schoolId);
+    const action = school?.frozen ? 'unfreeze' : 'freeze';
+    
+    if (!window.confirm(`Are you sure you want to ${action} this school?`)) {
+      return;
+    }
+
+    setFreezingSchoolId(schoolId);
+    setError(null);
+
+    try {
+      if (school?.frozen) {
+        await schoolAPI.unfreezeSchool(schoolId);
+      } else {
+        await schoolAPI.freezeSchool(schoolId);
+      }
+      // Re-fetch schools after successful freeze/unfreeze
+      await fetchSchools();
+    } catch (err) {
+      const apiError = err as APIError;
+      setError(apiError.message || `Failed to ${action} school`);
+    } finally {
+      setFreezingSchoolId(null);
+    }
   };
 
   const handleDelete = async (schoolId: string) => {
@@ -241,6 +271,19 @@ export function ManageSchools() {
       header: 'Status',
       render: (school) => {
         const status = (school.status || 'active').toLowerCase();
+        const isFrozen = school.frozen || false;
+        
+        // If frozen, only show Frozen badge
+        if (isFrozen) {
+          return (
+            <Badge variant="outline" className="border-purple-300 text-purple-700 bg-purple-50">
+              <Snowflake className="w-3 h-3 mr-1 fill-current" />
+              Frozen
+            </Badge>
+          );
+        }
+        
+        // Otherwise, show the status badge (Active, Inactive, etc.)
         return (
           <Badge variant={status === 'active' ? 'default' : 'secondary'}>
             {status.charAt(0).toUpperCase() + status.slice(1)}
@@ -254,6 +297,8 @@ export function ManageSchools() {
       render: (school) => {
         const schoolId = school._id || school.id || '';
         const isDeleting = deletingSchoolId === schoolId;
+        const isFreezing = freezingSchoolId === schoolId;
+        const isFrozen = school.frozen || false;
         return (
           <div className="flex items-center gap-2">
             <Button
@@ -261,16 +306,30 @@ export function ManageSchools() {
               size="sm"
               onClick={() => handleEdit(school)}
               className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-              disabled={loading || isDeleting}
+              disabled={loading || isDeleting || isFreezing || isFrozen}
+              title={isFrozen ? 'Cannot edit frozen school' : 'Edit school'}
             >
               <Edit className="w-4 h-4" />
             </Button>
             <Button
               variant="ghost"
               size="sm"
+              onClick={() => handleFreeze(schoolId)}
+              className={isFrozen 
+                ? "text-purple-600 hover:text-purple-700 hover:bg-purple-50" 
+                : "text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"}
+              disabled={loading || isDeleting || isFreezing}
+              title={isFrozen ? 'Unfreeze school' : 'Freeze school'}
+            >
+              {isFreezing ? '...' : <Snowflake className={`w-4 h-4 ${isFrozen ? 'fill-current' : ''}`} />}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => handleDelete(schoolId)}
               className="text-red-600 hover:text-red-700 hover:bg-red-50"
-              disabled={loading || isDeleting}
+              disabled={loading || isDeleting || isFreezing || isFrozen}
+              title={isFrozen ? 'Cannot delete frozen school' : 'Delete school'}
             >
               {isDeleting ? '...' : <Trash2 className="w-4 h-4" />}
             </Button>

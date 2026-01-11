@@ -5,6 +5,7 @@ const asyncHandler = require('../utils/asyncHandler');
 const bcrypt = require('bcryptjs');
 const mongoose = require('mongoose');
 const { getSchoolIdForOperation } = require('../utils/getSchoolId');
+const { checkSchoolNotFrozen } = require('../utils/schoolUtils');
 
 // @desc    Get all users
 // @route   GET /api/v1/users
@@ -466,6 +467,16 @@ const updateUser = asyncHandler(async (req, res, next) => {
         message: 'User does not belong to your school'
       });
     }
+
+    // Check if school is frozen
+    try {
+      await checkSchoolNotFrozen(userSchoolId, 'update');
+    } catch (error) {
+      return res.status(400).json({
+        success: false,
+        message: error.message
+      });
+    }
   }
 
   // SECURITY: Prevent changing role and schoolId
@@ -544,6 +555,16 @@ const deleteUser = asyncHandler(async (req, res, next) => {
       return res.status(403).json({
         success: false,
         message: 'User does not belong to your school'
+      });
+    }
+
+    // Check if school is frozen
+    try {
+      await checkSchoolNotFrozen(userSchoolId, 'delete');
+    } catch (error) {
+      return res.status(400).json({
+        success: false,
+        message: error.message
       });
     }
   }
