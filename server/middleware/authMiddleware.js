@@ -152,10 +152,15 @@ const authMiddleware = asyncHandler(async (req, res, next) => {
 
     // STEP 8: Set req.user
     console.log('[AUTH] STEP 8: Setting req.user');
+    // Extract schoolId properly: if populated (has _id), use _id.toString(), otherwise use toString()
+    let schoolIdValue = null;
+    if (user.schoolId) {
+      schoolIdValue = user.schoolId._id ? user.schoolId._id.toString() : user.schoolId.toString();
+    }
     req.user = {
       id: user._id.toString(),
       role: user.role,
-      schoolId: user.schoolId ? user.schoolId.toString() : null
+      schoolId: schoolIdValue
     };
     console.log('[AUTH] ✅ req.user set:', JSON.stringify(req.user, null, 2));
     
